@@ -1,0 +1,10 @@
+venv/
+.env
+__pycache__/
+*.pyc
+*.sqlite3
+data/halal_screener.db
+pipeline.log
+*.png
+.vscode/
+.idea/
