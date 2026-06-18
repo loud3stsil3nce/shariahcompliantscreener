@@ -1,0 +1,12 @@
+services:
+  shariahscreener:
+    build: . # Tells docker to build from the Dockerfile in the current directory
+    container_name: shariahscreener
+    image: shariahscreener:dev
+    ports:
+      - "8501:8501"
+    env_file:
+      - .env
+    volumes:
+      - .:/app
+      
