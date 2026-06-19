@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from src.utils import get_db
+from src.db.helpers import get_db
 
 def render():
     st.header("⚙️ Active Shariah Segment Rules (AI-Generated)")

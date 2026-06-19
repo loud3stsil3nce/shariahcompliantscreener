@@ -5,9 +5,9 @@ import numpy as np
 import json
 from unittest.mock import MagicMock
 
-from src.screener import run_screener
-from src.optimizer import run_optimizer, get_data
-from src.ai_analyst import analyze_company_compliance
+from src.analysis.screener import run_screener
+from src.analysis.optimizer import run_optimizer, get_data
+from src.analysis.ai_analyst import analyze_company_compliance
 from tests.e2e.conftest import MockGenerativeModel, MockYFinanceTicker
 
 # Helper to populate stocks table

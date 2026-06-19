@@ -1,5 +1,5 @@
 import pandas as pd
-from src.utils import get_db
+from src.db.helpers import get_db
 
 # Initialize database tables if they don't exist
 def init_db_tables():

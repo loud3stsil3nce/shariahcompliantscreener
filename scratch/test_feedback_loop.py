@@ -9,9 +9,9 @@ from dotenv import load_dotenv
 sys.path.append("/home/rafi/shariahcompliantscreener")
 load_dotenv(dotenv_path="/home/rafi/shariahcompliantscreener/.env")
 
-from src.ai_analyst import get_historical_guidance
-from src.db_setup import save_proposed_rules
-from src.utils import get_db
+from src.analysis.ai_analyst import get_historical_guidance
+from src.db.setup import save_proposed_rules
+from src.db.helpers import get_db
 
 def run_feedback_loop_test():
     ticker = "MOCKCO"

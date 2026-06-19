@@ -1,10 +1,10 @@
 import sqlite3
 import pytest
 import pandas as pd
-from src.screener import run_screener
-from src.optimizer import run_optimizer
-from src.batch_ai_audit import run_background_audit
-from src.ai_analyst import analyze_company_compliance
+from src.analysis.screener import run_screener
+from src.analysis.optimizer import run_optimizer
+from src.analysis.batch_ai_audit import run_background_audit
+from src.analysis.ai_analyst import analyze_company_compliance
 from tests.e2e.conftest import MockGenerativeModel
 
 # Helper to populate stocks table

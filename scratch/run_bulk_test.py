@@ -10,9 +10,9 @@ from dotenv import load_dotenv
 sys.path.append("/home/rafi/shariahcompliantscreener")
 load_dotenv(dotenv_path="/home/rafi/shariahcompliantscreener/.env")
 
-from src.sec_extractor import get_latest_10k_text
-from src.harvester import harvest_all_sources
-from src.ai_analyst import analyze_multi_source_compliance
+from src.data.sec_extractor import get_latest_10k_text
+from src.data.harvester import harvest_all_sources
+from src.analysis.ai_analyst import analyze_multi_source_compliance
 
 async def audit_stock(ticker, name):
     print(f"\n==================================================")

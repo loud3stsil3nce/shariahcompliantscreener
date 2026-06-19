@@ -2,11 +2,14 @@ import streamlit as st
 import pandas as pd
 import os
 import json
-from src.ingestion import run_ingestion
-from src.screener import run_screener
-from src.optimizer import run_optimizer
-from src.backtester import run_backtest
-from src.utils import get_db
+
+from src.data.ingestion import run_ingestion
+
+from src.analysis.screener import run_screener
+from src.analysis.optimizer import run_optimizer
+from src.analysis.backtester import run_backtest
+from src.db.helpers import get_db
+
 from ui.dashboard_tab import render as render_dashboard
 from ui.database_tab import render as render_database
 from ui.explorer_tab import render as render_explorer

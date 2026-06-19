@@ -1,8 +1,8 @@
 import sqlite3
 import pytest
 import pandas as pd
-from src.db_setup import save_proposed_rules
-from src.utils import get_db
+from src.db.setup import save_proposed_rules
+from src.db.helpers import get_db
 
 def test_save_proposed_rules(tmp_path, monkeypatch):
     db_path = tmp_path / "test.db"

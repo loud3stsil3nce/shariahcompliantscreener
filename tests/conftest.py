@@ -6,7 +6,7 @@ import pandas as pd
 import pytest
 import yfinance as yf
 
-from src.ingestion import init_db
+from src.data.ingestion import init_db
 
 # Presets for mock yfinance Ticker data
 TICKER_PRESETS = {
@@ -110,21 +110,22 @@ def setup_db(db_path, monkeypatch):
 
     # Import modules to patch
     import src.utils
-    import src.screener
-    import src.optimizer
-    import src.ai_analyst
-    import src.ingestion
-    import src.backtester
-    import src.db_setup
+    import src.analysis.screener
+    import src.analysis.optimizer
+    import src.analysis.ai_analyst
+    import src.data.ingestion
+    import src.analysis.backtester
+    import src.db.setup
+    import src.db.helpers
     
     # Apply monkeypatching BEFORE initializing schema
     monkeypatch.setattr(src.utils, "get_db", fake_get_db)
-    monkeypatch.setattr(src.screener, "get_db", fake_get_db)
-    monkeypatch.setattr(src.optimizer, "get_db", fake_get_db)
-    monkeypatch.setattr(src.ingestion, "get_db", fake_get_db)
-    monkeypatch.setattr(src.ai_analyst, "get_db", fake_get_db, raising=False)
-    monkeypatch.setattr(src.backtester, "get_db", fake_get_db, raising=False)
-    monkeypatch.setattr(src.db_setup, "get_db", fake_get_db)
+    monkeypatch.setattr(src.analysis.screener, "get_db", fake_get_db)
+    monkeypatch.setattr(src.analysis.optimizer, "get_db", fake_get_db)
+    monkeypatch.setattr(src.data.ingestion, "get_db", fake_get_db)
+    monkeypatch.setattr(src.analysis.ai_analyst, "get_db", fake_get_db, raising=False)
+    monkeypatch.setattr(src.analysis.backtester, "get_db", fake_get_db, raising=False)
+    monkeypatch.setattr(src.db.setup, "get_db", fake_get_db)
     
     # We may also need to patch UI modules if they are imported by tests
     try:

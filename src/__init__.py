@@ -1,4 +1,4 @@
 """Shariah compliant screener package."""
-from .ingestion import run_ingestion
-from .optimizer import run_optimizer
-from .screener import run_screener
+from .data.ingestion import run_ingestion
+from .analysis.optimizer import run_optimizer
+from .analysis.screener import run_screener

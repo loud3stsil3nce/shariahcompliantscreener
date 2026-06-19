@@ -1,8 +1,8 @@
 import argparse
 
-from src.ingestion import run_ingestion
-from src.optimizer import run_optimizer
-from src.screener import run_screener
+from src.data.ingestion import run_ingestion
+from src.analysis.optimizer import run_optimizer
+from src.analysis.screener import run_screener
 
 
 def run_delete(ticker):

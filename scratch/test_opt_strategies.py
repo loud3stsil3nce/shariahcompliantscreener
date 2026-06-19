@@ -2,7 +2,7 @@ import sqlite3
 import numpy as np
 import pandas as pd
 from pathlib import Path
-from src.optimizer import run_optimizer
+from src.analysis.optimizer import run_optimizer
 import matplotlib
 matplotlib.use('Agg')
 
@@ -38,9 +38,9 @@ def fake_download(tickers, period, interval, auto_adjust):
         index=dates,
     )
 
-import src.optimizer
-src.optimizer.get_db = fake_get_db
-src.optimizer.yf.download = fake_download
+import src.analysis.optimizer
+src.analysis.optimizer.get_db = fake_get_db
+src.analysis.optimizer.yf.download = fake_download
 import matplotlib.pyplot as plt
 plt.savefig = lambda *args, **kwargs: None
 

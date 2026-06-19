@@ -7,7 +7,8 @@ from datetime import datetime
 import pandas as pd
 import yfinance as yf
 
-from .utils import get_db, load_universe
+from src.db.helpers import get_db
+from src.data.ingestion import load_universe
 
 import os
 os.makedirs("logs", exist_ok=True)
@@ -16,6 +17,24 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
 )
+
+TICKERS_CSV = "data/tickers.csv"
+
+
+def normalize_ticker(ticker: str) -> str:
+    return ticker.strip().replace(".", "-").upper()
+
+
+def load_universe(filepath: str = TICKERS_CSV):
+    try:
+        df = pd.read_csv(filepath)
+        return [normalize_ticker(t) for t in df["Symbol"].dropna().astype(str).unique().tolist()]
+    except Exception as e:
+        print(f"Error loading CSV: {e}")
+        return []
+
+
+
 
 # SCHEMA
 CREATE_TABLE = """

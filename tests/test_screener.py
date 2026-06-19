@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from src.screener import run_screener
+from src.analysis.screener import run_screener
 
 
 def create_stock_db(path: Path):

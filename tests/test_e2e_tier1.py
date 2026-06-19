@@ -8,20 +8,22 @@ from unittest.mock import MagicMock
 
 # Import from source modules
 import src.utils
-import src.screener
-import src.optimizer
-import src.ai_analyst
-from src.ai_analyst import analyze_company_compliance, SYSTEM_PROMPT
+import src.db.helpers
+import src.analysis.screener
+import src.analysis.optimizer
+import src.analysis.ai_analyst
+from src.analysis.ai_analyst import analyze_company_compliance
+from src.ai.prompting import SYSTEM_PROMPT
 
 # Dynamic delegation helper to avoid import binding issues after monkeypatching
 def run_screener(*args, **kwargs):
     return src.screener.run_screener(*args, **kwargs)
 
 def get_data(*args, **kwargs):
-    return src.optimizer.get_data(*args, **kwargs)
+    return src.analysis.optimizer.get_data(*args, **kwargs)
 
 def run_optimizer(*args, **kwargs):
-    return src.optimizer.run_optimizer(*args, **kwargs)
+    return src.analysis.optimizer.run_optimizer(*args, **kwargs)
 
 # Regex ticker extractor for Mock AI response routing
 def extract_ticker_from_prompt(prompt):
@@ -222,7 +224,7 @@ def mock_run_screener(*args, **kwargs):
     return res
 
 def mock_get_data(include_doubtful=False):
-    conn = src.optimizer.get_db()
+    conn = src.analysis.optimizer.get_db()
     try:
         df_halal = pd.read_sql_query("SELECT ticker, sector, purification_per_share FROM halal_universe", conn)
     except Exception:
@@ -258,7 +260,7 @@ def mock_get_data(include_doubtful=False):
     
     return prices, filtered_sector_map, filtered_purification_map
 
-original_run_optimizer = src.optimizer.run_optimizer
+original_run_optimizer = src.analysis.optimizer.run_optimizer
 
 def mock_run_optimizer(max_weight=0.10, sector_cap=0.30, strategy="Max Sharpe", target_vol=0.15, target_ret=0.15, include_doubtful=False):
     if not isinstance(include_doubtful, bool):
@@ -266,9 +268,9 @@ def mock_run_optimizer(max_weight=0.10, sector_cap=0.30, strategy="Max Sharpe", 
 
     def temp_get_data(include_doubtful=False):
         return mock_get_data(include_doubtful=include_doubtful)
-    import src.optimizer
-    old_get_data = src.optimizer.get_data
-    src.optimizer.get_data = temp_get_data
+    import src.analysis.optimizer
+    old_get_data = src.analysis.optimizer.get_data
+    src.analysis.optimizer.get_data = temp_get_data
     try:
         return original_run_optimizer(
             max_weight=max_weight,
@@ -279,15 +281,15 @@ def mock_run_optimizer(max_weight=0.10, sector_cap=0.30, strategy="Max Sharpe", 
             include_doubtful=include_doubtful
         )
     finally:
-        src.optimizer.get_data = old_get_data
+        src.analysis.optimizer.get_data = old_get_data
 
 # Autouse fixture to monkeypatch APIs and modules
 @pytest.fixture(autouse=True)
 def mock_external_apis(monkeypatch):
     monkeypatch.setattr("src.ai_analyst._client", MockAIClient())
     monkeypatch.setattr("src.screener.run_screener", mock_run_screener)
-    monkeypatch.setattr("src.optimizer.get_data", mock_get_data)
-    monkeypatch.setattr("src.optimizer.run_optimizer", mock_run_optimizer)
+    monkeypatch.setattr("src.analysis.optimizer.get_data", mock_get_data)
+    monkeypatch.setattr("src.analysis.optimizer.run_optimizer", mock_run_optimizer)
 
 # Helper function to insert mock stock data
 def insert_stock_data(conn, ticker, total_assets=1000.0, cash_equivalents=100.0, accounts_receivable=50.0, total_debt=10.0, total_revenue=500.0, interest_income=1.0, avg_market_cap_36mo=10000.0, shares_outstanding=100.0, sector="Technology", industry="Software"):

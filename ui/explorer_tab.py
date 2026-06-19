@@ -2,9 +2,9 @@ import streamlit as st
 import pandas as pd
 import json
 import os
-from src.utils import get_db
-from src.screener import run_screener
-from src.screener import get_effective_override, MAX_DEBT_RATIO, MAX_CASH_RATIO, MIN_TANGIBILITY_RATIO, MAX_LIQUID_RATIO, MAX_HARAM_INCOME_RATIO, HARAM_SECTORS, HARAM_INDUSTRY_KEYWORDS
+from src.db.helpers import get_db
+from src.analysis.screener import run_screener
+from src.analysis.screener import get_effective_override, MAX_DEBT_RATIO, MAX_CASH_RATIO, MIN_TANGIBILITY_RATIO, MAX_LIQUID_RATIO, MAX_HARAM_INCOME_RATIO, HARAM_SECTORS, HARAM_INDUSTRY_KEYWORDS
 def render():
     st.header("🔍 Individual Stock Explorer")
     conn = get_db()
@@ -25,7 +25,7 @@ def render():
                     st.info(f"Ticker {custom_ticker} is already in the database!")
                 else:
                     with st.spinner(f"Ingesting {custom_ticker} from Yahoo Finance..."):
-                        from src.ingestion import fetch_stock_with_retry
+                        from src.data.ingestion import fetch_stock_with_retry
                         data = fetch_stock_with_retry(custom_ticker)
                         if data:
                             conn_add = get_db()
@@ -88,7 +88,7 @@ def render():
             if enable_live:
                 import yfinance as yf
                 import numpy as np
-                from src.screener import get_effective_override, MAX_DEBT_RATIO, MAX_CASH_RATIO, MIN_TANGIBILITY_RATIO, MAX_LIQUID_RATIO, MAX_HARAM_INCOME_RATIO, HARAM_SECTORS, HARAM_INDUSTRY_KEYWORDS
+                from src.analysis.screener import get_effective_override, MAX_DEBT_RATIO, MAX_CASH_RATIO, MIN_TANGIBILITY_RATIO, MAX_LIQUID_RATIO, MAX_HARAM_INCOME_RATIO, HARAM_SECTORS, HARAM_INDUSTRY_KEYWORDS
                 
                 with st.spinner("Fetching real-time price..."):
                     try:
@@ -228,9 +228,9 @@ def render():
 
                 # --- SOURCE-BACKED AUDIT ---
                 if st.button("🔬 Source-Backed Deep Audit (Very Accurate)"):
-                    from src.sec_extractor import get_latest_10k_text
-                    from src.ai_analyst import analyze_company_compliance
-                    from src.db_setup import save_proposed_rules
+                    from src.data.sec_extractor import get_latest_10k_text
+                    from src.analysis.ai_analyst import analyze_company_compliance
+                    from src.db.setup import save_proposed_rules
 
                     with st.spinner(f"🔍 Locating and downloading latest annual report (10-K/20-F) for {stock_data['ticker']} on SEC EDGAR..."):
                         source_text, source_url = get_latest_10k_text(stock_data['ticker'])
@@ -307,10 +307,10 @@ def render():
 
                 # --- MULTI-SOURCE HARVESTER AUDIT ---
                 if st.button("🌐 Multi-Source Harvester Audit (Gold Standard)", help="Parallel-retrieves 10-K, earnings call transcripts, and investor supplements to run a cross-source semantic RAG audit."):
-                    from src.sec_extractor import get_latest_10k_text
-                    from src.harvester import harvest_all_sources
-                    from src.ai_analyst import analyze_multi_source_compliance
-                    from src.db_setup import save_proposed_rules
+                    from src.data.sec_extractor import get_latest_10k_text
+                    from src.data.harvester import harvest_all_sources
+                    from src.analysis.ai_analyst import analyze_multi_source_compliance
+                    from src.db.setup import save_proposed_rules
                     import threading
                     import asyncio
 
@@ -411,8 +411,8 @@ def render():
                         st.error("Could not compile search or transcript chunks. Check internet connectivity.")
 
                 if st.button("🔍 Standard AI Analysis (Fast)"):
-                    from src.ai_analyst import analyze_company_compliance
-                    from src.db_setup import save_proposed_rules
+                    from src.analysis.ai_analyst import analyze_company_compliance
+                    from src.db.setup import save_proposed_rules
 
                     db_financials = {
                         'total_revenue': stock_data.get('total_revenue', 0.0) or 0.0,
@@ -510,14 +510,14 @@ def render():
                                         raw_text = uploaded_file.read().decode("utf-8", errors="ignore")
                                         st.info(f"Read TXT file successfully (Total {len(raw_text)} characters).")
                                     
-                                    from src.sec_extractor import SECParser
+                                    from src.data.sec_extractor import SECParser
                                     parser = SECParser()
                                     source_text = parser.extract_relevant_sections(raw_text, max_chars=300000)
                                     st.info(f"Filtered to {len(source_text)} relevant characters using Shariah heuristics.")
                                     
                                     with st.spinner("🧠 Gemini is auditing the extracted document..."):
-                                        from src.ai_analyst import analyze_company_compliance
-                                        from src.db_setup import save_proposed_rules
+                                        from src.analysis.ai_analyst import analyze_company_compliance
+                                        from src.db.setup import save_proposed_rules
                                         db_financials = {
                                             'total_revenue': stock_data.get('total_revenue', 0.0) or 0.0,
                                             'total_debt': stock_data.get('total_debt', 0.0) or 0.0,
@@ -599,7 +599,7 @@ def render():
 
                 denom_mc = live_cap if (enable_live and live_cap) else (stock_data['avg_market_cap_36mo'] or 1.0)
 
-                from src.screener import get_effective_override
+                from src.analysis.screener import get_effective_override
                 raw_debt, d_m = format_ratio(stock_data['total_debt'], denom_mc)
                 debt_override = get_effective_override(stock_data, 'debt_ratio_override')
                 debt_v = debt_override if not pd.isna(debt_override) else raw_debt

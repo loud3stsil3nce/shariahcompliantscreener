@@ -5,10 +5,11 @@ import numpy as np
 import json
 from unittest.mock import MagicMock, patch
 
-from src.screener import run_screener
-from src.optimizer import run_optimizer, get_data
-from src.ai_analyst import analyze_company_compliance, SYSTEM_PROMPT
-from src.ingestion import run_ingestion
+from src.analysis.screener import run_screener
+from src.analysis.optimizer import run_optimizer, get_data
+from src.analysis.ai_analyst import analyze_company_compliance
+from src.ai.prompting import SYSTEM_PROMPT
+from src.data.ingestion import run_ingestion
 from tests.e2e.conftest import MockGenerativeModel
 
 # Helper to populate stocks table

@@ -1,6 +1,6 @@
 import streamlit as st
 import os
-from src.backtester import run_backtest
+from src.analysis.backtester import run_backtest
 
 def render():
     st.header("⏳ Historical Performance Simulation")

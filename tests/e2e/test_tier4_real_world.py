@@ -1,9 +1,9 @@
 import sqlite3
 import pytest
 import pandas as pd
-from src.screener import run_screener
-from src.optimizer import run_optimizer
-from src.batch_ai_audit import run_background_audit
+from src.analysis.screener import run_screener
+from src.analysis.optimizer import run_optimizer
+from src.analysis.batch_ai_audit import run_background_audit
 
 # Helper to populate stocks table
 def insert_stock_data(conn, ticker, total_assets=1000.0, cash_equivalents=100.0, accounts_receivable=50.0, total_debt=100.0, total_revenue=500.0, interest_income=10.0, avg_market_cap_36mo=10000.0, shares_outstanding=100.0, sector="Technology", industry="Software"):

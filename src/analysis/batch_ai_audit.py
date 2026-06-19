@@ -2,8 +2,8 @@ import os
 import json
 import time
 import pandas as pd
-from src.utils import get_db
-from src.ai_analyst import analyze_company_compliance
+from src.db.helpers import get_db
+from src.analysis.ai_analyst import analyze_company_compliance
 
 def run_background_audit():
     conn = get_db()

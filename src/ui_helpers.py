@@ -1,8 +1,8 @@
 import streamlit as st
 import os
-from src.ingestion import run_ingestion
-from src.screener import run_screener
-from src.optimizer import run_optimizer
+from src.data.ingestion import run_ingestion
+from src.analysis.screener import run_screener
+from src.analysis.optimizer import run_optimizer
 
 def apply_custom_css():
     st.markdown("""

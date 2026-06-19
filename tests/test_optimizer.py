@@ -6,7 +6,7 @@ import pandas as pd
 from pandas import Timestamp
 import pytest
 
-from src.optimizer import get_data, get_portfolio_stats, objective
+from src.analysis.optimizer import get_data, get_portfolio_stats, objective
 
 
 def create_halal_universe_db(path: Path):
@@ -118,7 +118,7 @@ def test_run_optimizer_strategies(tmp_path, monkeypatch):
     # Mock plt.savefig so it doesn't try to write to filesystem or fails
     monkeypatch.setattr("src.optimizer.plt.savefig", lambda *args, **kwargs: None)
 
-    from src.optimizer import run_optimizer
+    from src.analysis.optimizer import run_optimizer
 
     for strategy in ["Max Sharpe", "Min Volatility", "Target Volatility", "Target Return"]:
         res = run_optimizer(

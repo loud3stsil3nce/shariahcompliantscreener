@@ -4,7 +4,7 @@ import yfinance as yf
 import matplotlib.pyplot as plt
 from scipy.optimize import minimize
 from sklearn.covariance import LedoitWolf
-from .utils import get_db
+from src.db.helpers import get_db
 
 def get_historical_prices(tickers, start_date, end_date):
     """Fetch historical prices for tickers and the benchmark (SPY)."""

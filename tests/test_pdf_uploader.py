@@ -1,7 +1,7 @@
 import io
 from unittest.mock import MagicMock
 import pytest
-from src.sec_extractor import SECParser
+from src.data.sec_extractor import SECParser
 
 def test_sec_parser_keywords_filter():
     parser = SECParser()

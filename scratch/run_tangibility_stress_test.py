@@ -10,7 +10,7 @@ import numpy as np
 # Adjust sys.path to import from src
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-import src.screener
+import src.analysis.screener
 
 def calculate_oracle_ratio(stock, override, curated):
     """

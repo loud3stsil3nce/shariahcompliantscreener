@@ -8,12 +8,16 @@ import pytest
 from unittest.mock import MagicMock
 
 # Import production modules
-import src.utils
-import src.screener
-import src.optimizer
-import src.ai_analyst
-import src.ingestion
-import src.backtester
+import src.data
+import src.db
+
+import src.analysis.screener
+import src.analysis.optimizer
+import src.analysis.ai_analyst
+import src.analysis.backtester
+
+import src.data.ingestion
+
 
 # Define regex ticker extractor
 def extract_ticker_from_prompt(prompt):
@@ -280,7 +284,7 @@ def mock_run_screener(*args, **kwargs):
 
 # Wrapped get_data
 def mock_get_data(include_doubtful=False):
-    conn = src.optimizer.get_db()
+    conn = src.analysis.optimizer.get_db()
     try:
         df_halal = pd.read_sql_query("SELECT ticker, sector, purification_per_share FROM halal_universe", conn)
     except Exception:
@@ -370,15 +374,15 @@ def isolated_db(tmp_path, monkeypatch):
         return conn
 
     # Apply monkeypatching to intercept DB_PATH and get_db across all entrypoints
-    monkeypatch.setattr("src.utils.DB_PATH", str(db_file))
-    monkeypatch.setattr("src.utils.get_db", mock_get_db)
-    monkeypatch.setattr("src.screener.get_db", mock_get_db)
-    monkeypatch.setattr("src.optimizer.get_db", mock_get_db)
-    monkeypatch.setattr("src.ingestion.get_db", mock_get_db)
+    monkeypatch.setattr("src.db.helpers.DB_PATH", str(db_file))
+    monkeypatch.setattr("src.db.helpers.get_db", mock_get_db)
+    monkeypatch.setattr("src.analysis.screener.get_db", mock_get_db)
+    monkeypatch.setattr("src.analysis.optimizer.get_db", mock_get_db)
+    monkeypatch.setattr("src.data.ingestion.get_db", mock_get_db)
     monkeypatch.setattr("ui.database_tab.get_db", mock_get_db)
     monkeypatch.setattr("ui.explorer_tab.get_db", mock_get_db)
     monkeypatch.setattr("ui.rules_tab.get_db", mock_get_db)
-    monkeypatch.setattr("src.db_setup.get_db", mock_get_db)
+    monkeypatch.setattr("src.db.setup.get_db", mock_get_db)
     
     # Initialize schema
     conn = mock_get_db()

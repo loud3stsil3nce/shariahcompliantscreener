@@ -2,7 +2,7 @@ import json
 import numpy as np
 import pandas as pd
 
-from .utils import get_db
+from src.db.helpers import get_db
 
 MAX_DEBT_RATIO = 0.30
 MAX_CASH_RATIO = 0.30
