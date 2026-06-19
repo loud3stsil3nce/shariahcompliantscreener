@@ -7,4 +7,5 @@ data/halal_screener.db
 pipeline.log
 *.png
 .vscode/
-.idea/
+.idea/.env
+data/*.db
