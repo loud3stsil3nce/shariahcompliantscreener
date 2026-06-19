@@ -9,7 +9,7 @@ import requests
 from bs4 import BeautifulSoup
 import google.generativeai as genai
 
-# Setup API keys
+# --- API keys
 load_dotenv_status = False
 try:
     from dotenv import load_dotenv
@@ -18,6 +18,7 @@ try:
 except ImportError:
     pass
 
+# --- retry/backoff for API calls (handles 429/quota)
 def call_with_retry(api_func, *args, **kwargs):
     import time
     import re
@@ -38,6 +39,7 @@ def call_with_retry(api_func, *args, **kwargs):
                 raise e
     raise Exception("Max retries exceeded for Gemini API call.")
 
+# --- batched Gemini embedding callers with rate-limit handling and zero-vector fallback ---
 def get_gemini_embeddings(texts, model="models/gemini-embedding-001"):
     """Fetch embeddings for a list of texts using Gemini's API in batches."""
     api_key = os.getenv("GEMINI_API_KEY")
@@ -119,6 +121,7 @@ def get_gemini_query_embedding(query, model="models/gemini-embedding-001"):
         print(f"Error fetching query embedding: {e}")
         return [0.0] * 3072
 
+# --- overlap chunking with sentence-boundary heuristics ---
 def chunk_text(text, chunk_size=1000, overlap=150):
     """Split text recursively into overlapping chunks."""
     if not text:
@@ -152,6 +155,7 @@ def chunk_text(text, chunk_size=1000, overlap=150):
             
     return [c for c in chunks if len(c) > 30]  # Filter out noise
 
+# --- cosine-similarity search using embeddings, with keyword fallback when embeddings are zero ---
 def semantic_search(query, chunks, chunk_embeddings, top_k=5):
     """Perform cosine-similarity vector search over chunks using NumPy."""
     if not chunks or not chunk_embeddings:
@@ -220,6 +224,7 @@ def semantic_search(query, chunks, chunk_embeddings, top_k=5):
 
 # --- SEC EDGAR, TRANSCRIPTS & SEARCH FETCHERS ---
 
+# --- tries FMP, Alpha Vantage, then Google-scrape fallbacks for earnings transcripts ---
 async def fetch_transcript(ticker, year=2025, quarter=4):
     """Fetch earnings call transcript from APIs or fallback to web scraping."""
     ticker = ticker.upper().strip()
@@ -273,6 +278,7 @@ async def fetch_transcript(ticker, year=2025, quarter=4):
                 
     return ""
 
+# --- SerpAPI → Google scrape to find PDF slides ---
 async def search_ir_presentation_pdf(ticker, year=2025, quarter=4):
     """Find the URL of the company's investor presentation PDF using search queries."""
     ticker = ticker.upper().strip()
@@ -323,6 +329,7 @@ async def search_google_urls(query):
         
     return urls
 
+# --- downloads PDF and extracts text via pypdf ---
 async def download_pdf_text(url):
     """Download a PDF and extract its text content."""
     try:
@@ -343,6 +350,7 @@ async def download_pdf_text(url):
         print(f"Failed to download or parse PDF {url}: {e}")
     return ""
 
+# --- SerpAPI → Google scraping, then scrapes top pages and returns snippets + short scrapes ---
 async def search_web_evidence(query, num_results=3):
     """
     Query SerpAPI or scrape Google for a query, and return a concatenated 
@@ -399,7 +407,12 @@ async def search_web_evidence(query, num_results=3):
             
     return "\n".join(evidence_parts)
 
-
+# --- runs transcript, PDF search, and web search in parallel (asyncio.gather),
+# --- optionally includes sec_text if passed
+# --- chunks each source with chunk_text
+# --- returns a dict: 
+# {"compiled_text", "chunks", "embeddings", "pdf_url", "has_transcript", "has_presentation", "has_web_search"}
+# --- input: ticker, optional sec_text, year, quarter
 async def harvest_all_sources(ticker, year=2025, quarter=4, sec_text=None):
     """Fetch from SEC, Search, and Transcript parallelly, returning compiled vectors."""
     print(f"🚀 Launching Parallel Harvester for {ticker} Q{quarter} {year}...")

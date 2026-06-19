@@ -284,16 +284,18 @@ def analyze_company_compliance(ticker, name, summary, source_text=None, db_finan
     for model_name in models_to_try:
         for attempt in range(3):
             try:
-                # Setup model
-                model = genai.GenerativeModel(
-                    model_name=model_name,
-                    system_instruction=SYSTEM_PROMPT
-                )
-                response = model.generate_content(
-                    prompt,
+                # temporary comment out to see effects of change to _client
+                #model = genai.GenerativeModel(
+                #    model_name=model_name,
+                #    system_instruction=SYSTEM_PROMPT
+                #)
+                response = _client.models.generate_content(
+                    model=model_name,
+                    prompt=prompt,
+                    system_instruction=SYSTEM_PROMPT,
                     generation_config=genai.types.GenerationConfig(
                         response_mime_type="application/json",
-                        response_schema=RESPONSE_SCHEMA
+                        response_schema=RESPONSE_SCHEMA 
                     )
                 )
                 return json.loads(response.text)
@@ -338,19 +340,34 @@ def analyze_company_compliance(ticker, name, summary, source_text=None, db_finan
         }
         payload = {
             "model": "gpt-4o-mini",
-            "response_format": {"type": "json_object"},
             "messages": [
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": prompt}
             ],
+            "functions": [
+                {"name": "audit", "description": "Return compliance audit", "parameters": RESPONSE_SCHEMA}
+            ],
+            "function_call": {"name": "audit"},
             "temperature": 0.1
         }
         try:
             r = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload, timeout=90)
             r.raise_for_status()
             res_json = r.json()
-            content = res_json["choices"][0]["message"]["content"]
-            parsed = json.loads(content)
+            msg = res_json["choices"][0]["message"]
+            
+            if "function_call" in msg:
+                args = msg["function_call"].get("arguments", "{}")
+                parsed = json.loads(args)
+            else:
+                content = msg.get("content", "")
+                parsed = json.loads(content) if content else {}
+
+            # simple validation
+            for k in RESPONSE_SCHEMA.get("required", []):
+                if k not in parsed:
+                    raise ValueError(f"Missing required key: {k}")
+
             parsed["audit_source"] = "OpenAI Fallback (gpt-4o-mini)"
             return parsed
         except Exception as e:
