@@ -2,7 +2,7 @@ import os
 import json
 import google.generativeai as genai
 from dotenv import load_dotenv
-
+_client = genai
 load_dotenv()
 
 # Set up Gemini
