@@ -8,6 +8,8 @@ MAX_DEBT_RATIO = 0.30
 MAX_CASH_RATIO = 0.30
 MAX_RECEIVABLES_RATIO = 0.45
 MAX_HARAM_INCOME_RATIO = 0.05
+MIN_TANGIBILITY_RATIO = 0.30
+MAX_LIQUID_RATIO = 0.70
 
 HARAM_SECTORS = ["financial"]
 HARAM_INDUSTRY_KEYWORDS = [
@@ -22,7 +24,42 @@ HARAM_INDUSTRY_KEYWORDS = [
     "adult",
     "pork",
 ]
+CURATED_BENCHMARKS = {
+        "AAPL": {
+            "doubtful_revenue_override": 0.0312,
+            "interest_income_override": 0.0096,
+            "cash_ratio_override": 0.0447,
+            "debt_ratio_override": 0.0262,
+        },
+        "MSFT": {
+            "haram_revenue_override": 0.0760,
+            "interest_income_override": 0.0094,
+            "cash_ratio_override": 0.0315,
+            "debt_ratio_override": 0.0197,
+        },
+        "GOOG": {
+            "doubtful_revenue_override": 0.7200,
+            "interest_income_override": 0.0108,
+        },
+        "GOOGL": {
+            "doubtful_revenue_override": 0.7200,
+            "interest_income_override": 0.0108,
+        },
+        "META": {
+            "doubtful_revenue_override": 0.9800,
+            "interest_income_override": 0.0120,
+        }
+    }
 
+def get_effective_override(row, field):
+        db_val = row[field]
+        if db_val is not None and not pd.isna(db_val):
+            return db_val
+        ticker = str(row["ticker"]).upper().strip()
+        if ticker in CURATED_BENCHMARKS and field in CURATED_BENCHMARKS[ticker]:
+            return CURATED_BENCHMARKS[ticker][field]
+        return np.nan
+    
 
 def run_screener(use_current_market_cap=False):
     conn = get_db()
@@ -80,41 +117,9 @@ def run_screener(use_current_market_cap=False):
     df["pass_industry"] = ~df["industry_lower"].str.contains("|".join(HARAM_INDUSTRY_KEYWORDS), na=False)
 
     # Curated benchmarks from Musaffa/AAOIFI for major conglomerates
-    CURATED_BENCHMARKS = {
-        "AAPL": {
-            "doubtful_revenue_override": 0.0312,
-            "interest_income_override": 0.0096,
-            "cash_ratio_override": 0.0447,
-            "debt_ratio_override": 0.0262,
-        },
-        "MSFT": {
-            "haram_revenue_override": 0.0760,
-            "interest_income_override": 0.0094,
-            "cash_ratio_override": 0.0315,
-            "debt_ratio_override": 0.0197,
-        },
-        "GOOG": {
-            "doubtful_revenue_override": 0.7200,
-            "interest_income_override": 0.0108,
-        },
-        "GOOGL": {
-            "doubtful_revenue_override": 0.7200,
-            "interest_income_override": 0.0108,
-        },
-        "META": {
-            "doubtful_revenue_override": 0.9800,
-            "interest_income_override": 0.0120,
-        }
-    }
+    
 
-    def get_effective_override(row, field):
-        db_val = row[field]
-        if db_val is not None and not pd.isna(db_val):
-            return db_val
-        ticker = str(row["ticker"]).upper().strip()
-        if ticker in CURATED_BENCHMARKS and field in CURATED_BENCHMARKS[ticker]:
-            return CURATED_BENCHMARKS[ticker][field]
-        return np.nan
+    
 
     # Calculate Ratios with Manual Override and Curated Preset Precedence
     def apply_override(calculated, override):

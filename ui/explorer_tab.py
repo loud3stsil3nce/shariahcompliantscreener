@@ -4,7 +4,7 @@ import json
 import os
 from src.utils import get_db
 from src.screener import run_screener
-
+from src.screener import get_effective_override, MAX_DEBT_RATIO, MAX_CASH_RATIO, MIN_TANGIBILITY_RATIO, MAX_LIQUID_RATIO, MAX_HARAM_INCOME_RATIO, HARAM_SECTORS, HARAM_INDUSTRY_KEYWORDS
 def render():
     st.header("🔍 Individual Stock Explorer")
     conn = get_db()
