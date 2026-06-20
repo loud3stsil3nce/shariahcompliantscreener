@@ -355,7 +355,7 @@ def render():
                                 summary=business_summary
                             )
                             
-                            if "error" not in ai_res:
+                            if isinstance(ai_res, dict) and "error" not in ai_res:
                                 st.session_state[f"ai_scan_{search_ticker}"] = ai_res
                                 
                                 # --- AUTOMATIC SAVE AND SCREENER WORKFLOW ---
@@ -407,7 +407,8 @@ def render():
                                 finally:
                                     conn_s.close()
                             else:
-                                st.error(ai_res["error"])
+                                err_msg = ai_res.get("error") if isinstance(ai_res, dict) else str(ai_res)
+                                st.error(err_msg)
                     else:
                         st.error("Could not compile search or transcript chunks. Check internet connectivity.")
 

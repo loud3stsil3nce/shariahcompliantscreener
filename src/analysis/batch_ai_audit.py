@@ -45,16 +45,20 @@ def run_background_audit():
                 # Call AI
                 res = analyze_company_compliance(ticker, row['name'], summary, db_financials=db_financials)
                 
-                if "error" in res:
-                    if "429" in res["error"] or "quota" in res["error"].lower():
+                if isinstance(res, dict) and "error" in res:
+                    err_str = res["error"]
+                    if "429" in err_str or "quota" in err_str.lower():
                         attempts += 1
                         wait_time = 60 * attempts
                         print(f"🛑 Rate limit! (Attempt {attempts}/3). Waiting {wait_time}s...")
                         time.sleep(wait_time)
                         continue # Try the SAME ticker again
                     else:
-                        print(f"❌ Failed: {res['error']}")
+                        print(f"❌ Failed: {err_str}")
                         break # Give up on this ticker
+                elif not isinstance(res, dict):
+                    print(f"❌ Failed: Invalid response format: {res}")
+                    break
 
                 # AAOIFI Scale Math matching frontend
                 mc_36 = row['avg_market_cap_36mo'] or 1.0
