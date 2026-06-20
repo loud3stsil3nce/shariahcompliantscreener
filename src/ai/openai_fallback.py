@@ -8,9 +8,10 @@ load_dotenv()
 
 
 
-def call_openai(prompt_text, system_prompt):
+def call_openai(prompt_text, system_prompt, schema=None):
     """OpenAI fallback when Gemini fails."""
     openai_key = os.getenv("OPENAI_API_KEY")
+    schema = schema or RESPONSE_SCHEMA
     if not openai_key:
         return None
     
@@ -26,7 +27,7 @@ def call_openai(prompt_text, system_prompt):
             {"role": "user", "content": prompt_text}
         ],
         "functions": [
-            {"name": "audit", "description": "Return compliance audit", "parameters": RESPONSE_SCHEMA}
+            {"name": "audit", "description": "Return compliance audit", "parameters": schema}
         ],
         "function_call": {"name": "audit"},
         "temperature": 0.1
@@ -42,7 +43,7 @@ def call_openai(prompt_text, system_prompt):
         else:
             parsed = json.loads(msg.get("content", "{}"))
         
-        for k in RESPONSE_SCHEMA.get("required", []):
+        for k in schema.get("required", []):
             if k not in parsed:
                 raise ValueError(f"Missing required key: {k}")
         

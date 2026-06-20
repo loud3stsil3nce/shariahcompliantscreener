@@ -52,25 +52,29 @@ async def test_aapl_now():
     cash_ratio = ib_cash / mcap
     
     print("\n=== SYSTEM AUDIT RESULTS (CURRENT PIPELINE) ===")
-    print(f"Haram Business Revenue Ratio: {res.get('haram_revenue'):.2%}")
-    print(f"Doubtful Business Revenue Ratio: {res.get('doubtful_revenue'):.2%}")
-    print(f"Interest Income Ratio: {res.get('interest_income'):.2%}")
-    print(f"Debt / Market Cap Ratio: {debt_ratio:.2%}")
-    print(f"Cash / Market Cap Ratio: {cash_ratio:.2%}")
+    print(f"Total Revenue: ${res.get('total_revenue_millions'):,.2f} million")
+    print(f"Haram Business Revenue Ratio: {res.get('haram_revenue'):.2%} (${res.get('haram_revenue_millions'):,.2f} million)")
+    print(f"Doubtful Business Revenue Ratio: {res.get('doubtful_revenue'):.2%} (${res.get('doubtful_revenue_millions'):,.2f} million)")
+    print(f"Interest Income Ratio: {res.get('interest_income'):.2%} (${res.get('interest_income_millions'):,.2f} million)")
+    print(f"Debt / Market Cap Ratio: {debt_ratio:.2%} (${res.get('interest_bearing_debt_millions'):,.2f} million)")
+    print(f"Cash / Market Cap Ratio: {cash_ratio:.2%} (${res.get('interest_bearing_securities_millions'):,.2f} million)")
+    
+    print("\n=== AI DETAILED REASONING & CITATIONS ===")
+    print(res.get("reasoning", "No reasoning details found."))
     
     print("\n=== SIDE-BY-SIDE COMPARE TO MUSAFFA ===")
     print(f"{'Metric':<30} | {'Musaffa Target':<15} | {'Our Output':<15} | {'Status':<15}")
     print(f"{'-'*30}-+-{'-'*15}-+-{'-'*15}-+-{'-'*15}")
     
     # Compare interest-bearing debt
-    print(f"{'Debt / Market Cap':<30} | {'2.62%':<15} | {debt_ratio:.2%} | {'🎯 100% Match':<15}")
+    print(f"{'Debt / Market Cap':<30} | {'2.62%':<15} | {debt_ratio:.2%} | {'🎯 100% Match' if abs(debt_ratio - 0.0262) < 0.005 else 'Differs':<15}")
     # Compare interest-bearing cash
-    print(f"{'Cash / Market Cap':<30} | {'4.47%':<15} | {cash_ratio:.2%} | {'🎯 100% Match':<15}")
+    print(f"{'Cash / Market Cap':<30} | {'4.47%':<15} | {cash_ratio:.2%} | {'🎯 100% Match' if abs(cash_ratio - 0.0447) < 0.005 else 'Differs':<15}")
     # Compare interest income
-    print(f"{'Interest Income':<30} | {'0.96%':<15} | {res.get('interest_income'):.2%} | {'🎯 100% Match':<15}")
+    print(f"{'Interest Income':<30} | {'0.96%':<15} | {res.get('interest_income'):.2%} | {'🎯 100% Match' if abs(res.get('interest_income', 0.0) - 0.0096) < 0.002 else 'Differs':<15}")
     # Compare total business revenue
     total_business = res.get('haram_revenue', 0.0) - res.get('interest_income', 0.0) + res.get('doubtful_revenue', 0.0)
-    print(f"{'Total Non-Halal Business Rev':<30} | {'3.12%':<15} | {total_business:.2%} | {'🎯 100% Match':<15}")
+    print(f"{'Total Non-Halal Business Rev':<30} | {'3.12%':<15} | {total_business:.2%} | {'🎯 100% Match' if abs(total_business - 0.0312) < 0.005 else 'Differs':<15}")
 
 if __name__ == "__main__":
     asyncio.run(test_aapl_now())

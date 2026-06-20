@@ -15,9 +15,10 @@ if api_key:
 
 
 
-def call_gemini(prompt_text,system_prompt, client=None):
+def call_gemini(prompt_text,system_prompt, client=None, schema=None):
     """Call Gemini to perform a full Shariah Audit, optionally using 10-K source text."""
     client = client or genai
+    schema = schema or RESPONSE_SCHEMA
     if not api_key:
         return {"error": "Gemini API Key not found."}
 
@@ -41,7 +42,8 @@ def call_gemini(prompt_text,system_prompt, client=None):
                         contents=prompt_text,
                         config=genai.types.GenerationConfig(
                             response_mime_type="application/json",
-                            response_schema=RESPONSE_SCHEMA 
+                            response_schema=schema,
+                            temperature=0.1
                         )
                     )
                 else:
@@ -53,7 +55,8 @@ def call_gemini(prompt_text,system_prompt, client=None):
                         prompt_text,
                         generation_config=genai.types.GenerationConfig(
                             response_mime_type="application/json",
-                            response_schema=RESPONSE_SCHEMA 
+                            response_schema=schema,
+                            temperature=0.1
                         )
                     )
                 return json.loads(response.text)

@@ -233,36 +233,47 @@ async def fetch_transcript(ticker, year=2025, quarter=4):
     fmp_key = os.getenv("FMP_API_KEY")
     if fmp_key:
         url = f"https://financialmodelingprep.com/api/v3/earning_call_transcript/{ticker}?quarter={quarter}&year={year}&apikey={fmp_key}"
+        print(f"🔌 [Harvester] [Transcript] Attempting FMP API fetch for {ticker} Q{quarter} {year}...")
         try:
             r = await asyncio.to_thread(requests.get, url, timeout=15)
             if r.status_code == 200:
                 data = r.json()
                 if isinstance(data, list) and len(data) > 0:
-                    return data[0].get("transcript", "")
+                    text = data[0].get("transcript", "")
+                    if text:
+                        print(f"✅ [Harvester] [Transcript] FMP API returned transcript successfully ({len(text)} characters).")
+                        return text
+            print(f"⚠️ [Harvester] [Transcript] FMP API returned status {r.status_code} or empty response.")
         except Exception as e:
-            print(f"FMP transcript fetch failed for {ticker}: {e}")
+            print(f"❌ [Harvester] [Transcript] FMP API query encountered an error: {e}")
 
     # 2. Try Alpha Vantage if API Key exists
     av_key = os.getenv("ALPHA_VANTAGE_API_KEY")
     if av_key:
         url = f"https://www.alphavantage.co/query?function=EARNINGS_CALL_TRANSCRIPT&symbol={ticker}&year={year}&quarter=Q{quarter}&apikey={av_key}"
+        print(f"🔌 [Harvester] [Transcript] Attempting Alpha Vantage API fetch for {ticker} Q{quarter} {year}...")
         try:
             r = await asyncio.to_thread(requests.get, url, timeout=15)
             if r.status_code == 200:
                 data = r.json()
-                # Alpha Vantage returns transcript in 'transcript' key or list
                 if "transcript" in data:
-                    return data["transcript"]
+                    text = data["transcript"]
+                    if text:
+                        print(f"✅ [Harvester] [Transcript] Alpha Vantage API returned transcript successfully ({len(text)} characters).")
+                        return text
+            print(f"⚠️ [Harvester] [Transcript] Alpha Vantage API returned status {r.status_code} or empty response.")
         except Exception as e:
-            print(f"Alpha Vantage transcript fetch failed for {ticker}: {e}")
+            print(f"❌ [Harvester] [Transcript] Alpha Vantage API query encountered an error: {e}")
 
     # 3. Fallback: Search Google for the transcript text
-    print(f"⚠️ No Transcript API keys found. Searching Google for {ticker} Q{quarter} {year} transcript...")
+    print(f"⚠️ [Harvester] [Transcript] Direct APIs unavailable or returned empty. Falling back to Google scraping...")
     search_query = f"{ticker} Q{quarter} {year} earnings call transcript Motley Fool"
+    print(f"🔍 [Harvester] [Transcript] Scraping Google results for query: '{search_query}'")
     urls = await search_google_urls(search_query)
     
     for url in urls[:2]:
         if "fool.com" in url or "seekingalpha.com" in url or "transcript" in url.lower():
+            print(f"🌐 [Harvester] [Transcript] Attempting to scrape text from: {url}")
             try:
                 headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
                 r = await asyncio.to_thread(requests.get, url, headers=headers, timeout=15)
@@ -272,10 +283,13 @@ async def fetch_transcript(ticker, year=2025, quarter=4):
                     if body:
                         text = body.get_text(" ")
                         if "transcript" in text.lower() or "call" in text.lower():
+                            print(f"✅ [Harvester] [Transcript] Successfully scraped transcript from web page ({len(text)} characters).")
                             return text
+                print(f"⚠️ [Harvester] [Transcript] Scrape returned status {r.status_code} or text not found on page.")
             except Exception as e:
-                print(f"Failed to scrape transcript from {url}: {e}")
+                print(f"❌ [Harvester] [Transcript] Failed to scrape transcript page {url}: {e}")
                 
+    print(f"❌ [Harvester] [Transcript] Failed to retrieve any earnings transcript for {ticker} Q{quarter} {year}.")
     return ""
 
 # --- SerpAPI → Google scrape to find PDF slides ---
@@ -287,6 +301,7 @@ async def search_ir_presentation_pdf(ticker, year=2025, quarter=4):
     # Try SerpAPI if key exists
     serp_key = os.getenv("SERPAPI_API_KEY")
     if serp_key:
+        print(f"🔌 [Harvester] [PDF Search] Attempting SerpAPI search for investor presentation PDF...")
         url = f"https://serpapi.com/search.json?q={urllib.parse.quote(query)}&api_key={serp_key}"
         try:
             r = await asyncio.to_thread(requests.get, url, timeout=15)
@@ -296,15 +311,20 @@ async def search_ir_presentation_pdf(ticker, year=2025, quarter=4):
                 for res in org_results:
                     link = res.get("link", "")
                     if link.lower().endswith(".pdf"):
+                        print(f"✅ [Harvester] [PDF Search] SerpAPI located PDF URL: {link}")
                         return link
+            print(f"⚠️ [Harvester] [PDF Search] SerpAPI returned status {r.status_code} or no links.")
         except Exception as e:
-            print(f"SerpAPI PDF search failed for {ticker}: {e}")
+            print(f"❌ [Harvester] [PDF Search] SerpAPI search failed: {e}")
 
     # Fallback: Scrape Google search results
+    print(f"🌐 [Harvester] [PDF Search] Falling back to manual Google search scraping...")
     urls = await search_google_urls(query)
     for url in urls:
         if url.lower().endswith(".pdf") or "presentation" in url.lower() or "supplement" in url.lower():
+            print(f"✅ [Harvester] [PDF Search] Scraper located PDF URL: {url}")
             return url
+    print(f"❌ [Harvester] [PDF Search] No presentation PDF URL located for {ticker}.")
     return ""
 
 async def search_google_urls(query):
@@ -332,6 +352,7 @@ async def search_google_urls(query):
 # --- downloads PDF and extracts text via pypdf ---
 async def download_pdf_text(url):
     """Download a PDF and extract its text content."""
+    print(f"📥 [Harvester] [PDF Downloader] Initiating download of PDF: {url}")
     try:
         headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
         r = await asyncio.to_thread(requests.get, url, headers=headers, timeout=25)
@@ -345,9 +366,12 @@ async def download_pdf_text(url):
                 t = page.extract_text()
                 if t:
                     text.append(t)
-            return "\n".join(text)
+            full_text = "\n".join(text)
+            print(f"✅ [Harvester] [PDF Downloader] Downloaded and parsed PDF successfully ({len(full_text)} characters, {len(reader.pages)} pages).")
+            return full_text
+        print(f"❌ [Harvester] [PDF Downloader] Failed download request with status code: {r.status_code}")
     except Exception as e:
-        print(f"Failed to download or parse PDF {url}: {e}")
+        print(f"❌ [Harvester] [PDF Downloader] Exception occurred while parsing PDF {url}: {e}")
     return ""
 
 # --- SerpAPI → Google scraping, then scrapes top pages and returns snippets + short scrapes ---
@@ -362,6 +386,7 @@ async def search_web_evidence(query, num_results=3):
     urls_to_scrape = []
     
     if serp_key:
+        print(f"🔌 [Harvester] [Web Search] Querying SerpAPI for: '{query}'...")
         url = f"https://serpapi.com/search.json?q={urllib.parse.quote(query)}&api_key={serp_key}"
         try:
             r = await asyncio.to_thread(requests.get, url, timeout=15)
@@ -375,11 +400,13 @@ async def search_web_evidence(query, num_results=3):
                     evidence_parts.append(f"Search Result {idx+1}: {title}\nURL: {link}\nSnippet: {snippet}\n")
                     if link and not link.lower().endswith(".pdf"):
                         urls_to_scrape.append(link)
+                print(f"✅ [Harvester] [Web Search] SerpAPI returned {len(org_results)} results.")
         except Exception as e:
-            print(f"SerpAPI query failed for '{query}': {e}")
+            print(f"❌ [Harvester] [Web Search] SerpAPI search failed: {e}")
     
     # If SerpAPI failed or wasn't configured, fall back to direct scraping
     if not evidence_parts:
+        print(f"🌐 [Harvester] [Web Search] Direct manual scraping Google for: '{query}'...")
         urls = await search_google_urls(query)
         urls_to_scrape = urls[:num_results]
         for idx, url_link in enumerate(urls_to_scrape):
@@ -388,6 +415,7 @@ async def search_web_evidence(query, num_results=3):
     # Scrape content from the top URLs to gather deep text evidence
     scraped_count = 0
     for url_link in urls_to_scrape[:2]:
+        print(f"🌐 [Harvester] [Web Search] Scraping deep text content from: {url_link}")
         try:
             headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
             r = await asyncio.to_thread(requests.get, url_link, headers=headers, timeout=10)
@@ -402,8 +430,11 @@ async def search_web_evidence(query, num_results=3):
                 # Limit characters to avoid overloading context
                 evidence_parts.append(f"\n[Scraped Content from {url_link}]:\n{cleaned_text[:3000]}\n")
                 scraped_count += 1
+                print(f"✅ [Harvester] [Web Search] Scraped successfully ({len(cleaned_text)} characters).")
+            else:
+                print(f"⚠️ [Harvester] [Web Search] Scrape request returned status: {r.status_code}")
         except Exception as e:
-            print(f"Failed to scrape text from {url_link}: {e}")
+            print(f"❌ [Harvester] [Web Search] Failed to scrape page {url_link}: {e}")
             
     return "\n".join(evidence_parts)
 

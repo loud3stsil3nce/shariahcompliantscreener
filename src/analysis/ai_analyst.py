@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 from src.ai.gemini_client import call_gemini
 from src.ai.openai_fallback import call_openai
 from src.ai.prompting import SYSTEM_PROMPT, prompt
+from src.analysis.multi_source import analyze_multi_source_compliance
 
 load_dotenv()
 
