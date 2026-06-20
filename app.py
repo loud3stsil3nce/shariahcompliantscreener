@@ -17,6 +17,7 @@ from ui.mcp_tab import render as render_mcp
 from ui.rules_tab import render as render_rules
 from ui.simulation_tab import render as render_simulation
 
+import sqlite3
 # Initialize database tables if they don't exist
 def init_db_tables():
     conn = get_db()

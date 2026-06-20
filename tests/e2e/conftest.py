@@ -252,13 +252,13 @@ def mock_yf_download(tickers, *args, **kwargs):
     return df
 
 # Wrapped run_screener
-original_run_screener = src.screener.run_screener
+original_run_screener = src.analysis.screener.run_screener
 
 def mock_run_screener(*args, **kwargs):
     res = original_run_screener(*args, **kwargs)
     
     # Process doubtful stocks
-    conn = src.screener.get_db()
+    conn = src.analysis.screener.get_db()
     try:
         cursor = conn.cursor()
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='halal_rejections'")

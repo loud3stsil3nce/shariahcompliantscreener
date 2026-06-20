@@ -1,4 +1,6 @@
+import sqlite3
 DB_PATH = "data/halal_screener.db"
+
 
 def get_db():
     conn = sqlite3.connect(DB_PATH)

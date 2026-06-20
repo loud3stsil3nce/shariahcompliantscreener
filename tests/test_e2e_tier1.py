@@ -17,7 +17,7 @@ from src.ai.prompting import SYSTEM_PROMPT
 
 # Dynamic delegation helper to avoid import binding issues after monkeypatching
 def run_screener(*args, **kwargs):
-    return src.screener.run_screener(*args, **kwargs)
+    return src.analysis.screener.run_screener(*args, **kwargs)
 
 def get_data(*args, **kwargs):
     return src.analysis.optimizer.get_data(*args, **kwargs)
@@ -197,11 +197,11 @@ class MockModels:
 class MockAIClient:
     """Drop-in replacement for src.ai_analyst._client."""
     models = MockModels()
-original_run_screener = src.screener.run_screener
+original_run_screener = src.analysis.screener.run_screener
 
 def mock_run_screener(*args, **kwargs):
     res = original_run_screener(*args, **kwargs)
-    conn = src.screener.get_db()
+    conn = src.analysis.screener.get_db()
     try:
         cursor = conn.cursor()
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='halal_rejections'")
@@ -287,7 +287,7 @@ def mock_run_optimizer(max_weight=0.10, sector_cap=0.30, strategy="Max Sharpe", 
 @pytest.fixture(autouse=True)
 def mock_external_apis(monkeypatch):
     monkeypatch.setattr("src.ai_analyst._client", MockAIClient())
-    monkeypatch.setattr("src.screener.run_screener", mock_run_screener)
+    monkeypatch.setattr("src.analysis.screener.run_screener", mock_run_screener)
     monkeypatch.setattr("src.analysis.optimizer.get_data", mock_get_data)
     monkeypatch.setattr("src.analysis.optimizer.run_optimizer", mock_run_optimizer)
 

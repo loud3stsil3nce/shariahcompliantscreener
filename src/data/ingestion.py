@@ -8,7 +8,6 @@ import pandas as pd
 import yfinance as yf
 
 from src.db.helpers import get_db
-from src.data.ingestion import load_universe
 
 import os
 os.makedirs("logs", exist_ok=True)
