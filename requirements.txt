@@ -46,3 +46,5 @@ streamlit
 python-dotenv
 google-generativeai
 pypdf
+asyncpg
+SQLAlchemy
