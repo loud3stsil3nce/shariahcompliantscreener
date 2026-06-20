@@ -1,5 +1,5 @@
 RESPONSE_SCHEMA = {
-    "type": "OBJECT",
+    "type": "object",
     "properties": {
         "haram_revenue": {"type": "number", "description": "Percentage of total revenue from non-compliant segments (0.0 to 1.0)"},
         "doubtful_revenue": {"type": "number", "description": "Percentage of total revenue from questionable/ambiguous/doubtful segments (0.0 to 1.0)"},

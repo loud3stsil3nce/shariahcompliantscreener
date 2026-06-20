@@ -358,6 +358,7 @@ def mock_external_apis(monkeypatch):
 
     mock_client.models.generate_content.side_effect = _generate_content
     monkeypatch.setattr("src.analysis.ai_analyst._client", mock_client)
+    monkeypatch.setattr("src.analysis.ai_analyst.call_openai", lambda *args, **kwargs: {"error": "OpenAI fallback failed (mocked)"})
     monkeypatch.setattr("yfinance.Ticker", MockYFinanceTicker)
     monkeypatch.setattr("yfinance.download", mock_yf_download)
 

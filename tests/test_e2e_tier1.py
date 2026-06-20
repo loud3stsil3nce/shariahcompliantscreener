@@ -287,6 +287,7 @@ def mock_run_optimizer(max_weight=0.10, sector_cap=0.30, strategy="Max Sharpe", 
 @pytest.fixture(autouse=True)
 def mock_external_apis(monkeypatch):
     monkeypatch.setattr("src.analysis.ai_analyst._client", MockAIClient())
+    monkeypatch.setattr("src.analysis.ai_analyst.call_openai", lambda *args, **kwargs: {"error": "OpenAI fallback failed (mocked)"})
     monkeypatch.setattr("src.analysis.screener.run_screener", mock_run_screener)
     monkeypatch.setattr("src.analysis.optimizer.get_data", mock_get_data)
     monkeypatch.setattr("src.analysis.optimizer.run_optimizer", mock_run_optimizer)
