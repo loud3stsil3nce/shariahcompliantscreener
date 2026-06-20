@@ -63,6 +63,7 @@ def init_db_tables():
             compliance_score REAL,
             debt_ratio REAL,
             cash_ratio REAL,
+            tangibility_ratio REAL,
             total_haram_ratio REAL,
             doubtful_ratio REAL,
             total_combined_ratio REAL,
@@ -88,6 +89,7 @@ def init_db_tables():
             compliance_score REAL,
             debt_ratio REAL,
             cash_ratio REAL,
+            tangibility_ratio REAL,
             total_haram_ratio REAL,
             doubtful_ratio REAL,
             total_combined_ratio REAL,
@@ -113,6 +115,7 @@ def init_db_tables():
             compliance_score REAL,
             debt_ratio REAL,
             cash_ratio REAL,
+            tangibility_ratio REAL,
             total_haram_ratio REAL,
             total_combined_ratio REAL,
             halal_failure TEXT,
@@ -139,6 +142,15 @@ def init_db_tables():
             conn.execute("ALTER TABLE manual_overrides ADD COLUMN is_user_override INTEGER DEFAULT 0")
         if "tangibility_ratio_override" not in columns:
             conn.execute("ALTER TABLE manual_overrides ADD COLUMN tangibility_ratio_override REAL")
+
+    # Schema migration for other tables to ensure they have tangibility_ratio column
+    for table_name in ["halal_universe", "doubtful_universe", "halal_rejections"]:
+        t_check = conn.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name='{table_name}'").fetchone()
+        if t_check:
+            cursor = conn.execute(f"PRAGMA table_info({table_name})")
+            columns = [row[1] for row in cursor.fetchall()]
+            if "tangibility_ratio" not in columns:
+                conn.execute(f"ALTER TABLE {table_name} ADD COLUMN tangibility_ratio REAL")
 
     # Create and seed shariah_segment_map
     conn.execute("""

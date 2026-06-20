@@ -17,66 +17,18 @@ from ui.mcp_tab import render as render_mcp
 from ui.rules_tab import render as render_rules
 from ui.simulation_tab import render as render_simulation
 
-import sqlite3
-# Initialize database tables if they don't exist
-def init_db_tables():
-    conn = get_db()
-    # USE executescript for multiple statements or safer schema management
-    conn.executescript("""
-        CREATE TABLE IF NOT EXISTS ai_overrides (
-            ticker TEXT PRIMARY KEY,
-            haram_revenue_estimate REAL,
-            reasoning TEXT,
-            segments_found TEXT,
-            updated_at TEXT
-        );
-        CREATE TABLE IF NOT EXISTS manual_overrides (
-            ticker TEXT PRIMARY KEY,
-            haram_revenue_override REAL,
-            debt_ratio_override REAL,
-            cash_ratio_override REAL,
-            receivables_ratio_override REAL,
-            interest_income_override REAL,
-            doubtful_revenue_override REAL,
-            reasoning TEXT,
-            updated_at TEXT
-        );
-        CREATE TABLE IF NOT EXISTS halal_universe (
-            ticker TEXT PRIMARY KEY,
-            grade TEXT,
-            compliance_score REAL,
-            purification_per_share REAL
-        );
-        CREATE TABLE IF NOT EXISTS halal_rejections (
-            ticker TEXT PRIMARY KEY,
-            grade TEXT,
-            compliance_score REAL,
-            purification_per_share REAL
-        );
-    """)
-    
-    # Schema migration: check if stocks table exists and has sec_filing_url column
-    table_check = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='stocks'").fetchone()
-    if table_check:
-        cursor = conn.execute("PRAGMA table_info(stocks)")
-        columns = [row[1] for row in cursor.fetchall()]
-        if "sec_filing_url" not in columns:
-            conn.execute("ALTER TABLE stocks ADD COLUMN sec_filing_url TEXT")
-            
-    # Schema migration for manual_overrides: check if doubtful_revenue_override exists
-    mo_check = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='manual_overrides'").fetchone()
-    if mo_check:
-        cursor = conn.execute("PRAGMA table_info(manual_overrides)")
-        columns = [row[1] for row in cursor.fetchall()]
-        if "doubtful_revenue_override" not in columns:
-            conn.execute("ALTER TABLE manual_overrides ADD COLUMN doubtful_revenue_override REAL")
-            
-    conn.commit()
-    conn.close()
-
-init_db_tables()
+from src.db.setup import init_db_tables
 
 st.set_page_config(page_title="Halal Stock Screener & Optimizer", layout="wide")
+
+# Initialize database tables once on first run
+if "db_initialized" not in st.session_state:
+    try:
+        init_db_tables()
+        st.session_state.db_initialized = True
+    except Exception as e:
+        st.error(f"Failed to initialize database: {e}")
+        st.stop()
 
 # Custom CSS for a cleaner look
 st.markdown("""

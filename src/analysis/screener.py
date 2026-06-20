@@ -82,6 +82,7 @@ def run_screener(use_current_market_cap=False):
                m.debt_ratio_override,
                m.cash_ratio_override,
                m.receivables_ratio_override,
+               m.tangibility_ratio_override,
                m.interest_income_override,
                m.doubtful_revenue_override
         FROM stocks s
@@ -116,11 +117,6 @@ def run_screener(use_current_market_cap=False):
     df["pass_sector"] = ~df["sector_lower"].str.contains("|".join(HARAM_SECTORS), na=False)
     df["pass_industry"] = ~df["industry_lower"].str.contains("|".join(HARAM_INDUSTRY_KEYWORDS), na=False)
 
-    # Curated benchmarks from Musaffa/AAOIFI for major conglomerates
-    
-
-    
-
     # Calculate Ratios with Manual Override and Curated Preset Precedence
     def apply_override(calculated, override):
         return override if not pd.isna(override) else calculated
@@ -135,10 +131,21 @@ def run_screener(use_current_market_cap=False):
     df["cash_ratio"] = df.apply(lambda x: apply_override(x["cash_ratio"], x["eff_cash_override"]), axis=1)
     df["pass_cash"] = df["cash_ratio"] < MAX_CASH_RATIO
 
+    # Receivables check (legacy receivables ratio calculated but no longer used for pass/fail compliance screen check)
     df["eff_rec_override"] = df.apply(lambda x: get_effective_override(x, "receivables_ratio_override"), axis=1)
     df["receivables_ratio"] = (df["accounts_receivable"] / assets).fillna(0)
     df["receivables_ratio"] = df.apply(lambda x: apply_override(x["receivables_ratio"], x["eff_rec_override"]), axis=1)
     df["pass_receivables"] = df["receivables_ratio"] < MAX_RECEIVABLES_RATIO
+
+    # Tangibility Screen check
+    df["eff_tang_override"] = df.apply(lambda x: get_effective_override(x, "tangibility_ratio_override"), axis=1)
+    # Liquid assets = Cash + AR
+    liquid_assets = df["cash_equivalents"].fillna(0) + df["accounts_receivable"].fillna(0)
+    calculated_tangibility = np.where(df["total_assets"] > 0, (df["total_assets"] - liquid_assets) / df["total_assets"], 0.0)
+    df["tangibility_ratio"] = calculated_tangibility
+    df["tangibility_ratio"] = df.apply(lambda x: apply_override(x["tangibility_ratio"], x["eff_tang_override"]), axis=1)
+    df["tangibility_ratio"] = df["tangibility_ratio"].fillna(0.0)
+    df["pass_tangibility"] = df["tangibility_ratio"] >= MIN_TANGIBILITY_RATIO
 
     # Combine Interest Income with Manual/AI Revenue Overrides
     df["eff_int_override"] = df.apply(lambda x: get_effective_override(x, "interest_income_override"), axis=1)
@@ -163,7 +170,7 @@ def run_screener(use_current_market_cap=False):
         df["pass_industry"] &
         df["pass_debt"] &
         df["pass_cash"] &
-        df["pass_receivables"] &
+        df["pass_tangibility"] &
         df["pass_interest"] &
         df["pass_combined_interest"]
     )
@@ -177,7 +184,7 @@ def run_screener(use_current_market_cap=False):
                 row["pass_industry"] &
                 row["pass_debt"] &
                 row["pass_cash"] &
-                row["pass_receivables"] &
+                row["pass_tangibility"] &
                 row["pass_interest"] &
                 (not row["pass_combined_interest"])
             )
@@ -188,11 +195,11 @@ def run_screener(use_current_market_cap=False):
         # Calculate scores for each metric (lower is better, 0.0 is perfect)
         s_debt = row["debt_ratio"] / MAX_DEBT_RATIO
         s_cash = row["cash_ratio"] / MAX_CASH_RATIO
-        s_rec = row["receivables_ratio"] / MAX_RECEIVABLES_RATIO
+        s_liq = (1 - row["tangibility_ratio"]) / MAX_LIQUID_RATIO
         s_int = row["total_combined_ratio"] / MAX_HARAM_INCOME_RATIO
         
         # Total score (average of ratios, lower is better)
-        avg_ratio = np.mean([s_debt, s_cash, s_rec, s_int])
+        avg_ratio = np.mean([s_debt, s_cash, s_liq, s_int])
         
         # Map to 0-100 (where 100 is best)
         score = max(0, 100 * (1 - avg_ratio))
@@ -217,7 +224,7 @@ def run_screener(use_current_market_cap=False):
                 (f"Industry: {row['industry']}", row["pass_industry"]),
                 (f"Debt: {row['debt_ratio']:.1%} > 30%", row["pass_debt"]),
                 (f"Cash: {row['cash_ratio']:.1%} > 30%", row["pass_cash"]),
-                (f"Receivables: {row['receivables_ratio']:.1%} > 45%", row["pass_receivables"]),
+                (f"Tangibility: {row['tangibility_ratio']:.1%} < 30%", row["pass_tangibility"]),
                 (f"Total Haram Revenue: {row['total_haram_ratio']:.1%} > 5%", row["pass_interest"]),
                 (f"Haram + Doubtful Revenue: {row['total_combined_ratio']:.1%} > 5%", row["pass_combined_interest"]),
             ] if not passed
@@ -226,16 +233,17 @@ def run_screener(use_current_market_cap=False):
     )
 
     # PHASE 4: Purification Calculation
-    halal_universe = df[df["is_halal"]].copy()
-    
-    halal_universe["purification_per_share"] = (
-        halal_universe["interest_income"].fillna(0) / 
-        halal_universe["shares_outstanding"].replace(0, np.nan)
+    df["purification_per_share"] = (
+        df["interest_income"].fillna(0) / 
+        df["shares_outstanding"].replace(0, np.nan)
     ).fillna(0)
 
-    rejected_stocks = df[~df["is_halal"]].copy()
+    halal_universe = df[df["is_halal"]].copy()
+    doubtful_universe = df[(~df["is_halal"]) & (df["grade"] == "Doubtful")].copy()
+    rejected_stocks = df[(~df["is_halal"]) & (df["grade"] == "F")].copy()
 
     halal_universe.to_sql("halal_universe", conn, if_exists="replace", index=False)
+    doubtful_universe.to_sql("doubtful_universe", conn, if_exists="replace", index=False)
     rejected_stocks.to_sql("halal_rejections", conn, if_exists="replace", index=False)
 
     print(f"\n✅ Halal Universe ({len(halal_universe)} stocks passed):")
@@ -244,6 +252,13 @@ def run_screener(use_current_market_cap=False):
         summary["debt_ratio"] = (summary["debt_ratio"] * 100).round(2).astype(str) + "%"
         summary["purification_per_share"] = "$" + summary["purification_per_share"].round(4).astype(str)
         print(summary.to_string(index=False))
+
+    print(f"\n❔ Doubtful Universe ({len(doubtful_universe)} stocks):")
+    if not doubtful_universe.empty:
+        summary_doubtful = doubtful_universe[["ticker", "name", "grade", "debt_ratio", "purification_per_share"]].copy()
+        summary_doubtful["debt_ratio"] = (summary_doubtful["debt_ratio"] * 100).round(2).astype(str) + "%"
+        summary_doubtful["purification_per_share"] = "$" + summary_doubtful["purification_per_share"].round(4).astype(str)
+        print(summary_doubtful.to_string(index=False))
 
     print(f"\n❌ Rejected Stocks ({len(rejected_stocks)} failed):")
     for _, row in rejected_stocks.iterrows():

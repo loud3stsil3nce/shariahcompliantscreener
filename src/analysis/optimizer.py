@@ -8,14 +8,19 @@ from sklearn.covariance import LedoitWolf
 from src.db.helpers import get_db
 
 
-def get_data():
+def get_data(include_doubtful=False):
     conn = get_db()
     df_halal = pd.read_sql_query("SELECT ticker, sector, purification_per_share FROM halal_universe", conn)
+    if include_doubtful:
+        df_doubtful = pd.read_sql_query("SELECT ticker, sector, purification_per_share FROM doubtful_universe", conn)
+        df_combined = pd.concat([df_halal, df_doubtful], ignore_index=True).drop_duplicates(subset=["ticker"])
+    else:
+        df_combined = df_halal
     conn.close()
 
-    tickers = df_halal["ticker"].tolist()
-    sector_map = dict(zip(df_halal["ticker"], df_halal["sector"]))
-    purification_map = dict(zip(df_halal["ticker"], df_halal["purification_per_share"]))
+    tickers = df_combined["ticker"].tolist()
+    sector_map = dict(zip(df_combined["ticker"], df_combined["sector"]))
+    purification_map = dict(zip(df_combined["ticker"], df_combined["purification_per_share"]))
 
     if not tickers:
         raise ValueError("No halal universe found. Run the screener first.")
@@ -50,8 +55,10 @@ def objective(weights, log_returns, cov_matrix, strategy="Max Sharpe"):
     return -port_return / port_vol
 
 
-def run_optimizer(max_weight=0.10, sector_cap=0.30, strategy="Max Sharpe", target_vol=0.15, target_ret=0.15):
-    prices, sector_map, purification_map = get_data()
+def run_optimizer(max_weight=0.10, sector_cap=0.30, strategy="Max Sharpe", target_vol=0.15, target_ret=0.15, include_doubtful=False):
+    if not isinstance(include_doubtful, bool):
+        raise TypeError("include_doubtful must be a boolean")
+    prices, sector_map, purification_map = get_data(include_doubtful=include_doubtful)
     if prices.empty:
         print("No price data returned. Check the halal universe and try again.")
         return

@@ -254,7 +254,7 @@ def render():
                                 source_text=source_text,
                                 db_financials=db_financials
                             )
-                            if "error" not in ai_res:
+                            if isinstance(ai_res, dict) and "error" not in ai_res:
                                 st.session_state[f"ai_scan_{search_ticker}"] = ai_res
                                 
                                 # --- AUTOMATIC SAVE AND SCREENER WORKFLOW ---
@@ -301,7 +301,8 @@ def render():
                                 finally:
                                     conn_s.close()
                             else:
-                                st.error(ai_res["error"])
+                                err_msg = ai_res.get("error") if isinstance(ai_res, dict) else str(ai_res)
+                                st.error(err_msg)
                     else:
                         st.error(f"Could not retrieve filing: {source_url}")
 
@@ -427,7 +428,7 @@ def render():
                             business_summary,
                             db_financials=db_financials
                         )
-                        if "error" not in ai_res: 
+                        if isinstance(ai_res, dict) and "error" not in ai_res: 
                             st.session_state[f"ai_scan_{search_ticker}"] = ai_res
                             
                             # --- AUTOMATIC SAVE AND SCREENER WORKFLOW ---
@@ -478,6 +479,9 @@ def render():
                                 st.rerun()
                             finally:
                                 conn_s.close()
+                        else:
+                            err_msg = ai_res.get("error") if isinstance(ai_res, dict) else str(ai_res)
+                            st.error(err_msg)
 
                 st.write("---")
                 with st.expander("📤 Universal Document Uploader (PDF / TXT)"):
@@ -531,7 +535,7 @@ def render():
                                             source_text=source_text,
                                             db_financials=db_financials
                                         )
-                                        if "error" not in ai_res:
+                                        if isinstance(ai_res, dict) and "error" not in ai_res:
                                             st.session_state[f"ai_scan_{search_ticker}"] = ai_res
                                             
                                             # --- AUTOMATIC SAVE AND SCREENER WORKFLOW ---
@@ -584,7 +588,8 @@ def render():
                                             finally:
                                                 conn_s.close()
                                         else:
-                                            st.error(ai_res["error"])
+                                            err_msg = ai_res.get("error") if isinstance(ai_res, dict) else str(ai_res)
+                                            st.error(err_msg)
                                 except Exception as e:
                                     st.error(f"Error parsing or analyzing document: {e}")
             with d2:

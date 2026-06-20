@@ -79,8 +79,8 @@ def test_get_data_reads_close_prices(tmp_path, monkeypatch):
             index=[Timestamp("2026-01-01"), Timestamp("2026-01-02")],
         )
 
-    monkeypatch.setattr("src.optimizer.get_db", fake_get_db)
-    monkeypatch.setattr("src.optimizer.yf.download", fake_download)
+    monkeypatch.setattr("src.analysis.optimizer.get_db", fake_get_db)
+    monkeypatch.setattr("src.analysis.optimizer.yf.download", fake_download)
 
     df, sector_map, purification_map = get_data()
 
@@ -113,10 +113,10 @@ def test_run_optimizer_strategies(tmp_path, monkeypatch):
             index=dates,
         )
 
-    monkeypatch.setattr("src.optimizer.get_db", fake_get_db)
-    monkeypatch.setattr("src.optimizer.yf.download", fake_download)
+    monkeypatch.setattr("src.analysis.optimizer.get_db", fake_get_db)
+    monkeypatch.setattr("src.analysis.optimizer.yf.download", fake_download)
     # Mock plt.savefig so it doesn't try to write to filesystem or fails
-    monkeypatch.setattr("src.optimizer.plt.savefig", lambda *args, **kwargs: None)
+    monkeypatch.setattr("src.analysis.optimizer.plt.savefig", lambda *args, **kwargs: None)
 
     from src.analysis.optimizer import run_optimizer
 

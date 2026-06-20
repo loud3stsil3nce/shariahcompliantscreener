@@ -36,9 +36,11 @@ def create_stock_db(path: Path):
             debt_ratio_override REAL,
             cash_ratio_override REAL,
             receivables_ratio_override REAL,
+            tangibility_ratio_override REAL,
             interest_income_override REAL,
             doubtful_revenue_override REAL,
             reasoning TEXT,
+            is_user_override INTEGER DEFAULT 0,
             updated_at TEXT
         )
         """
@@ -78,7 +80,7 @@ def test_run_screener_creates_halal_universe(tmp_path, monkeypatch):
         conn.row_factory = sqlite3.Row
         return conn
 
-    monkeypatch.setattr("src.screener.get_db", fake_get_db)
+    monkeypatch.setattr("src.analysis.screener.get_db", fake_get_db)
 
     run_screener()
 

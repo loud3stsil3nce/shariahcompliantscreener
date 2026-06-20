@@ -39,7 +39,7 @@ def test_save_proposed_rules(tmp_path, monkeypatch):
         conn.row_factory = sqlite3.Row
         return conn
 
-    monkeypatch.setattr("src.db_setup.get_db", fake_get_db)
+    monkeypatch.setattr("src.db.setup.get_db", fake_get_db)
 
     ai_res = {
         "proposed_rules": [

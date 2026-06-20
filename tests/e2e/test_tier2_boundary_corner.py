@@ -10,6 +10,18 @@ from src.analysis.optimizer import run_optimizer, get_data
 from src.analysis.ai_analyst import analyze_company_compliance
 from tests.e2e.conftest import MockGenerativeModel, MockYFinanceTicker
 
+def set_mock_response(val):
+    import sys
+    import json
+    if isinstance(val, dict):
+        val = json.dumps(val)
+    for module in list(sys.modules.values()):
+        if module and hasattr(module, "MockGenerativeModel"):
+            getattr(module, "MockGenerativeModel").custom_response = val
+
+def clear_mock_response():
+    set_mock_response(None)
+
 # Helper to populate stocks table
 def insert_stock_data(conn, ticker, total_assets=1000.0, cash_equivalents=100.0, accounts_receivable=50.0, total_debt=100.0, total_revenue=500.0, interest_income=10.0, avg_market_cap_36mo=10000.0, shares_outstanding=100.0, sector="Technology", industry="Software"):
     conn.execute(
@@ -256,17 +268,17 @@ def test_optimizer_purification_calc(isolated_db):
 @pytest.mark.tier2
 def test_ai_auditor_malformed_json_response(isolated_db):
     """F4.41: Parser handles malformed JSON response from LLM gracefully."""
-    MockGenerativeModel.custom_response = "{malformed_json_here..."
+    set_mock_response("{malformed_json_here...")
     try:
         res = analyze_company_compliance("ANY", "Any Co", "Summary")
         assert "error" in res
     finally:
-        MockGenerativeModel.custom_response = None
+        clear_mock_response()
 
 @pytest.mark.tier2
 def test_ai_auditor_missing_financials(isolated_db):
     """F4.42: Filings missing revenue or asset details (handled with default fallback)."""
-    MockGenerativeModel.custom_response = json.dumps({
+    set_mock_response({
         "haram_revenue": 0.0,
         "doubtful_revenue": 0.0,
         "interest_bearing_debt": 0.0,
@@ -292,13 +304,13 @@ def test_ai_auditor_missing_financials(isolated_db):
         res = analyze_company_compliance("ANY", "Any Co", "Summary")
         assert res["total_revenue_millions"] == 0.0
     finally:
-        MockGenerativeModel.custom_response = None
+        clear_mock_response()
 
 @pytest.mark.tier2
 def test_ai_auditor_non_numeric_interest(isolated_db):
     """F4.43: LLM returns text like 'N/A' or 'undisclosed' for interest."""
     # The RESPONSE_SCHEMA dictates double/number, but LLM might bypass schema validation in extreme cases
-    MockGenerativeModel.custom_response = json.dumps({
+    set_mock_response({
         "haram_revenue": 0.0,
         "doubtful_revenue": 0.0,
         "interest_bearing_debt": 0.0,
@@ -326,12 +338,12 @@ def test_ai_auditor_non_numeric_interest(isolated_db):
         # Check that we handle or return it
         assert res["interest_income_millions"] == "N/A"
     finally:
-        MockGenerativeModel.custom_response = None
+        clear_mock_response()
 
 @pytest.mark.tier2
 def test_ai_auditor_extreme_interest_values(isolated_db):
     """F4.44: Interest income exceeds total revenue (handled/flagged)."""
-    MockGenerativeModel.custom_response = json.dumps({
+    set_mock_response({
         "haram_revenue": 0.0,
         "doubtful_revenue": 0.0,
         "interest_bearing_debt": 0.0,
@@ -357,7 +369,7 @@ def test_ai_auditor_extreme_interest_values(isolated_db):
         res = analyze_company_compliance("ANY", "Any Co", "Summary")
         assert res["interest_income_millions"] == 20.0
     finally:
-        MockGenerativeModel.custom_response = None
+        clear_mock_response()
 
 @pytest.mark.tier2
 def test_ai_auditor_multiple_interest_mentions(isolated_db):
@@ -371,7 +383,7 @@ def test_ai_auditor_multiple_interest_mentions(isolated_db):
 @pytest.mark.tier2
 def test_segment_disaggregation_unclear_text(isolated_db):
     """F5.46: Unstructured text with no clear numbers."""
-    MockGenerativeModel.custom_response = json.dumps({
+    set_mock_response({
         "haram_revenue": 0.0,
         "doubtful_revenue": 0.0,
         "interest_bearing_debt": 0.0,
@@ -398,12 +410,12 @@ def test_segment_disaggregation_unclear_text(isolated_db):
         assert res["haram_revenue_millions"] == 0.0
         assert res["doubtful_revenue_millions"] == 0.0
     finally:
-        MockGenerativeModel.custom_response = None
+        clear_mock_response()
 
 @pytest.mark.tier2
 def test_segment_disaggregation_rounding(isolated_db):
     """F5.47: Segment percentages sum to 99.9% or 100.1% due to rounding."""
-    MockGenerativeModel.custom_response = json.dumps({
+    set_mock_response({
         "haram_revenue": 0.001,
         "doubtful_revenue": 0.002,
         "interest_bearing_debt": 0.0,
@@ -429,12 +441,12 @@ def test_segment_disaggregation_rounding(isolated_db):
         res = analyze_company_compliance("ANY", "Any Co", "Summary")
         assert res["haram_revenue"] + res["doubtful_revenue"] == pytest.approx(0.003)
     finally:
-        MockGenerativeModel.custom_response = None
+        clear_mock_response()
 
 @pytest.mark.tier2
 def test_segment_disaggregation_negative_revenue(isolated_db):
     """F5.48: Handles negative segment revenue (e.g. accounting adjustments)."""
-    MockGenerativeModel.custom_response = json.dumps({
+    set_mock_response({
         "haram_revenue": 0.0,
         "doubtful_revenue": 0.0,
         "interest_bearing_debt": 0.0,
@@ -460,7 +472,7 @@ def test_segment_disaggregation_negative_revenue(isolated_db):
         res = analyze_company_compliance("ANY", "Any Co", "Summary")
         assert res["haram_revenue_millions"] == -5.0
     finally:
-        MockGenerativeModel.custom_response = None
+        clear_mock_response()
 
 @pytest.mark.tier2
 def test_segment_disaggregation_large_segments(isolated_db):

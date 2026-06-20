@@ -151,7 +151,7 @@ PROMPT_WITH_SOURCE = """
         Gross interest income represents yield earned on the cash/securities portfolio. If it is not explicitly isolated on the face of the Income Statement or in the Notes (often consolidated under Net Other Income), do NOT report it as 0.0. Instead, deduce it conservatively by applying an annual yield proxy of 3.0% (e.g. 3.0%) to the "total_cash_and_securities_millions" balance. For example, if cash/investments are $150,000 million, estimate gross interest income as $4,500 million (3.0% yield) and enter this under "interest_income_millions".
         
         DOCUMENT TEXT:
-        {source_text[:1500000]}
+        {source_text}
         
         Return the analysis as a JSON object.
         """
@@ -210,7 +210,7 @@ def prompt(name, ticker, summary, db_info, source_text=None):
             ticker=ticker,
             summary=summary,
             db_info=db_info,
-            source_text=source_text
+            source_text=source_text[:1500000]
         )
     return PROMPT_WITHOUT_SOURCE.format(
         name=name,

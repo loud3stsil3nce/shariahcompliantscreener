@@ -32,10 +32,15 @@ def analyze_company_compliance(ticker, name, summary, source_text=None, db_finan
     prompt_text = prompt(name, ticker, summary, db_info, source_text)
     
     # Try Gemini first
-    result = call_gemini(prompt_text, SYSTEM_PROMPT, client = _client)
-    if "error" not in result:
+    result = call_gemini(prompt_text, SYSTEM_PROMPT, client=_client)
+    if isinstance(result, dict) and "error" not in result:
         return result
     
     # Fall back to OpenAI
     result = call_openai(prompt_text, SYSTEM_PROMPT)
-    return result if result else {"error": "All AI services failed. Models exceeded quota/limits"}
+    if isinstance(result, dict) and "error" not in result:
+        return result
+        
+    if isinstance(result, dict) and "error" in result:
+        return result
+    return {"error": "All AI services failed. Models exceeded quota/limits"}

@@ -313,7 +313,7 @@ def mock_get_data(include_doubtful=False):
     return prices, filtered_sector_map, filtered_purification_map
 
 # Wrapped run_optimizer
-original_run_optimizer = src.optimizer.run_optimizer
+original_run_optimizer = src.analysis.optimizer.run_optimizer
 
 def mock_run_optimizer(max_weight=0.10, sector_cap=0.30, strategy="Max Sharpe", target_vol=0.15, target_ret=0.15, include_doubtful=False):
     if not isinstance(include_doubtful, bool):
@@ -323,9 +323,9 @@ def mock_run_optimizer(max_weight=0.10, sector_cap=0.30, strategy="Max Sharpe", 
         return mock_get_data(include_doubtful=include_doubtful)
         
     # We patch the optimizer get_data locally during optimization execution
-    import src.optimizer
-    old_get_data = src.optimizer.get_data
-    src.optimizer.get_data = temp_get_data
+    import src.analysis.optimizer
+    old_get_data = src.analysis.optimizer.get_data
+    src.analysis.optimizer.get_data = temp_get_data
     try:
         return original_run_optimizer(
             max_weight=max_weight,
@@ -335,7 +335,7 @@ def mock_run_optimizer(max_weight=0.10, sector_cap=0.30, strategy="Max Sharpe", 
             target_ret=target_ret
         )
     finally:
-        src.optimizer.get_data = old_get_data
+        src.analysis.optimizer.get_data = old_get_data
 
 @pytest.fixture(autouse=True)
 def mock_external_apis(monkeypatch):
@@ -357,7 +357,7 @@ def mock_external_apis(monkeypatch):
         return mock_resp
 
     mock_client.models.generate_content.side_effect = _generate_content
-    monkeypatch.setattr("src.ai_analyst._client", mock_client)
+    monkeypatch.setattr("src.analysis.ai_analyst._client", mock_client)
     monkeypatch.setattr("yfinance.Ticker", MockYFinanceTicker)
     monkeypatch.setattr("yfinance.download", mock_yf_download)
 
@@ -384,106 +384,8 @@ def isolated_db(tmp_path, monkeypatch):
     monkeypatch.setattr("ui.rules_tab.get_db", mock_get_db)
     monkeypatch.setattr("src.db.setup.get_db", mock_get_db)
     
-    # Initialize schema
-    conn = mock_get_db()
-    src.ingestion.init_db(conn)
-    
-    # Create required tables for E2E
-    tables_sql = {
-        "global_segment_patterns": """
-            CREATE TABLE IF NOT EXISTS global_segment_patterns (
-                pattern TEXT PRIMARY KEY,
-                compliance_status TEXT CHECK(compliance_status IN ('halal', 'haram', 'doubtful')),
-                notes TEXT
-            );
-        """,
-        "proposed_segment_rules": """
-            CREATE TABLE IF NOT EXISTS proposed_segment_rules (
-                ticker TEXT,
-                segment_name TEXT,
-                compliance_status TEXT CHECK(compliance_status IN ('halal', 'haram', 'doubtful')),
-                suggested_notes TEXT,
-                status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'approved', 'rejected')),
-                created_at TEXT,
-                PRIMARY KEY (ticker, segment_name)
-            );
-        """,
-        "halal_universe": """
-            CREATE TABLE IF NOT EXISTS halal_universe (
-                ticker TEXT PRIMARY KEY,
-                name TEXT,
-                sector TEXT,
-                industry TEXT,
-                total_assets REAL,
-                total_debt REAL,
-                cash_equivalents REAL,
-                accounts_receivable REAL,
-                total_revenue REAL,
-                interest_income REAL,
-                shares_outstanding REAL,
-                avg_market_cap_36mo REAL,
-                raw_info TEXT,
-                sec_filing_url TEXT,
-                fetched_at TEXT,
-                grade TEXT,
-                compliance_score REAL,
-                purification_per_share REAL
-            );
-        """,
-        "doubtful_universe": """
-            CREATE TABLE IF NOT EXISTS doubtful_universe (
-                ticker TEXT PRIMARY KEY,
-                name TEXT,
-                sector TEXT,
-                industry TEXT,
-                total_assets REAL,
-                total_debt REAL,
-                cash_equivalents REAL,
-                accounts_receivable REAL,
-                total_revenue REAL,
-                interest_income REAL,
-                shares_outstanding REAL,
-                avg_market_cap_36mo REAL,
-                raw_info TEXT,
-                sec_filing_url TEXT,
-                fetched_at TEXT,
-                grade TEXT,
-                compliance_score REAL,
-                purification_per_share REAL
-            );
-        """,
-        "halal_rejections": """
-            CREATE TABLE IF NOT EXISTS halal_rejections (
-                ticker TEXT PRIMARY KEY,
-                name TEXT,
-                sector TEXT,
-                industry TEXT,
-                total_assets REAL,
-                total_debt REAL,
-                cash_equivalents REAL,
-                accounts_receivable REAL,
-                total_revenue REAL,
-                interest_income REAL,
-                shares_outstanding REAL,
-                avg_market_cap_36mo REAL,
-                raw_info TEXT,
-                sec_filing_url TEXT,
-                fetched_at TEXT,
-                grade TEXT,
-                compliance_score REAL,
-                purification_per_share REAL,
-                halal_failure TEXT
-            );
-        """
-    }
-    for t_name, sql in tables_sql.items():
-        conn.execute(sql)
-        
-    # Seed default patterns
-    conn.execute("INSERT OR REPLACE INTO global_segment_patterns (pattern, compliance_status, notes) VALUES (?, ?, ?)", ("ad network", "doubtful", "Digital Advertising Rule."))
-    conn.execute("INSERT OR REPLACE INTO global_segment_patterns (pattern, compliance_status, notes) VALUES (?, ?, ?)", ("gaming", "doubtful", "General gaming segment."))
-    
-    conn.commit()
-    conn.close()
+    # Initialize schema using production setup (fully synchronized)
+    import src.db.setup as db_setup
+    db_setup.init_db_tables()
     
     yield db_file

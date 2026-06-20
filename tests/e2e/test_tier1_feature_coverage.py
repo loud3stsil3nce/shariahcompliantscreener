@@ -293,9 +293,8 @@ def test_ai_auditor_prefer_extracted_to_proxy(isolated_db):
 @pytest.mark.tier1
 def test_ai_auditor_parser_valid_interest(isolated_db):
     """F4.19: Parser extracts integer/float interest figures in millions."""
-    # Let's override MockGenerativeModel response to return raw integer/float
-    import google.generativeai as genai
-    genai.GenerativeModel.custom_response = json.dumps({
+    import sys
+    resp = json.dumps({
         "haram_revenue": 0.0,
         "doubtful_revenue": 0.0,
         "interest_bearing_debt": 0.0,
@@ -317,17 +316,22 @@ def test_ai_auditor_parser_valid_interest(isolated_db):
         "proposed_rules": [],
         "reasoning": "Standard"
     })
+    for module in list(sys.modules.values()):
+        if module and hasattr(module, "MockGenerativeModel"):
+            getattr(module, "MockGenerativeModel").custom_response = resp
     try:
         res = analyze_company_compliance("ANY", "Any Co", "Summary")
         assert isinstance(res["interest_income_millions"], (int, float))
         assert res["interest_income_millions"] == 50.0
     finally:
-        genai.GenerativeModel.custom_response = None
+        for module in list(sys.modules.values()):
+            if module and hasattr(module, "MockGenerativeModel"):
+                getattr(module, "MockGenerativeModel").custom_response = None
 @pytest.mark.tier1
 def test_ai_auditor_zero_interest(isolated_db):
     """F4.20: Verifies parser handles explicit zero interest disclosure."""
-    import google.generativeai as genai
-    genai.GenerativeModel.custom_response = json.dumps({
+    import sys
+    resp = json.dumps({
         "haram_revenue": 0.0,
         "doubtful_revenue": 0.0,
         "interest_bearing_debt": 0.0,
@@ -349,11 +353,16 @@ def test_ai_auditor_zero_interest(isolated_db):
         "proposed_rules": [],
         "reasoning": "Explicit zero interest"
     })
+    for module in list(sys.modules.values()):
+        if module and hasattr(module, "MockGenerativeModel"):
+            getattr(module, "MockGenerativeModel").custom_response = resp
     try:
         res = analyze_company_compliance("ANY", "Any Co", "Summary")
         assert res["interest_income_millions"] == 0.0
     finally:
-        genai.GenerativeModel.custom_response = None
+        for module in list(sys.modules.values()):
+            if module and hasattr(module, "MockGenerativeModel"):
+                getattr(module, "MockGenerativeModel").custom_response = None
 
 # --- F5: Robust Segment Disaggregation ---
 

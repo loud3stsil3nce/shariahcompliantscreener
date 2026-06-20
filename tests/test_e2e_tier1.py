@@ -7,7 +7,7 @@ import numpy as np
 from unittest.mock import MagicMock
 
 # Import from source modules
-import src.utils
+
 import src.db.helpers
 import src.analysis.screener
 import src.analysis.optimizer
@@ -286,7 +286,7 @@ def mock_run_optimizer(max_weight=0.10, sector_cap=0.30, strategy="Max Sharpe", 
 # Autouse fixture to monkeypatch APIs and modules
 @pytest.fixture(autouse=True)
 def mock_external_apis(monkeypatch):
-    monkeypatch.setattr("src.ai_analyst._client", MockAIClient())
+    monkeypatch.setattr("src.analysis.ai_analyst._client", MockAIClient())
     monkeypatch.setattr("src.analysis.screener.run_screener", mock_run_screener)
     monkeypatch.setattr("src.analysis.optimizer.get_data", mock_get_data)
     monkeypatch.setattr("src.analysis.optimizer.run_optimizer", mock_run_optimizer)

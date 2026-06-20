@@ -35,15 +35,27 @@ def call_gemini(prompt_text,system_prompt, client=None):
     for model_name in models_to_try:
         for attempt in range(3):
             try:
-                response = client.models.generate_content(
-                    model=model_name,
-                    prompt=prompt_text,
-                    system_instruction=system_prompt,
-                    generation_config=genai.types.GenerationConfig(
-                        response_mime_type="application/json",
-                        response_schema=RESPONSE_SCHEMA 
+                if hasattr(client, "models") and hasattr(client.models, "generate_content"):
+                    response = client.models.generate_content(
+                        model=model_name,
+                        contents=prompt_text,
+                        config=genai.types.GenerationConfig(
+                            response_mime_type="application/json",
+                            response_schema=RESPONSE_SCHEMA 
+                        )
                     )
-                )
+                else:
+                    model = client.GenerativeModel(
+                        model_name=model_name,
+                        system_instruction=system_prompt
+                    )
+                    response = model.generate_content(
+                        prompt_text,
+                        generation_config=genai.types.GenerationConfig(
+                            response_mime_type="application/json",
+                            response_schema=RESPONSE_SCHEMA 
+                        )
+                    )
                 return json.loads(response.text)
             except Exception as e:
                 err_str = str(e)

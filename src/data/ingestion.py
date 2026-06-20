@@ -61,8 +61,11 @@ CREATE TABLE IF NOT EXISTS manual_overrides (
     debt_ratio_override REAL,
     cash_ratio_override REAL,
     receivables_ratio_override REAL,
+    tangibility_ratio_override REAL,
     interest_income_override REAL,
+    doubtful_revenue_override REAL,
     reasoning TEXT,
+    is_user_override INTEGER DEFAULT 0,
     updated_at TEXT
 );
 """

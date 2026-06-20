@@ -109,7 +109,6 @@ def setup_db(db_path, monkeypatch):
         return conn
 
     # Import modules to patch
-    import src.utils
     import src.analysis.screener
     import src.analysis.optimizer
     import src.analysis.ai_analyst
@@ -119,7 +118,7 @@ def setup_db(db_path, monkeypatch):
     import src.db.helpers
     
     # Apply monkeypatching BEFORE initializing schema
-    monkeypatch.setattr(src.utils, "get_db", fake_get_db)
+    monkeypatch.setattr(src.db.helpers, "get_db", fake_get_db)
     monkeypatch.setattr(src.analysis.screener, "get_db", fake_get_db)
     monkeypatch.setattr(src.analysis.optimizer, "get_db", fake_get_db)
     monkeypatch.setattr(src.data.ingestion, "get_db", fake_get_db)
@@ -138,10 +137,10 @@ def setup_db(db_path, monkeypatch):
     except ImportError:
         pass
 
-    conn = sqlite3.connect(db_path)
+    # Initialize database using production schema setup (fully synchronized)
+    src.db.setup.init_db_tables()
 
-    # Initialize basic schema via src.ingestion.init_db
-    init_db(conn)
+    conn = sqlite3.connect(db_path)
 
     # Ensure all required tables are created
     tables_sql = {
@@ -250,7 +249,7 @@ def setup_db(db_path, monkeypatch):
             """
             INSERT OR REPLACE INTO curated_benchmarks (
                 ticker, doubtful_revenue_override, interest_income_override, cash_ratio_override,
-                debt_ratio_override, haram_revenue_override, reasoning
+                debt_ratio_override, haram_revenue_override, updated_at
             ) VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
             [
