@@ -95,3 +95,5 @@ yfinance==1.4.1
 asyncpg
 SQLAlchemy
 nest_asyncio   
+fastapi                                                                                                                                                                                                                                          
+uvicorn  

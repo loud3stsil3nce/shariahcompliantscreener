@@ -10,7 +10,7 @@ RUN pip install --no-cache-dir -r requirements.lock
 COPY . .
 
 # Expose Streamlit's default port
-EXPOSE 8501
+EXPOSE 8001
 
 # Run the web dashboard on startup
-CMD ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0"]
+CMD ["uvicorn", "src.api:app", "--host", "0.0.0.0", "--port", "8001"]

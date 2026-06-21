@@ -48,4 +48,6 @@ google-generativeai
 pypdf
 asyncpg
 SQLAlchemy
-nest_asyncio   
+nest_asyncio  
+fastapi                                                                                                                                                                                                                                          
+uvicorn   
