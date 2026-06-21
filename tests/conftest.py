@@ -108,24 +108,25 @@ def setup_db(db_path, monkeypatch):
         conn.row_factory = sqlite3.Row
         return conn
 
-    # Import modules to patch
-    import src.analysis.screener
-    import src.analysis.optimizer
-    import src.analysis.ai_analyst
-    import src.data.ingestion
-    import src.analysis.backtester
-    import src.db.setup
-    import src.db.helpers
-    
-    # Apply monkeypatching BEFORE initializing schema
-    monkeypatch.setattr(src.db.helpers, "get_db", fake_get_db)
-    monkeypatch.setattr(src.analysis.screener, "get_db", fake_get_db)
-    monkeypatch.setattr(src.analysis.optimizer, "get_db", fake_get_db)
-    monkeypatch.setattr(src.data.ingestion, "get_db", fake_get_db)
-    monkeypatch.setattr(src.analysis.ai_analyst, "get_db", fake_get_db, raising=False)
+    # Import modules to patch                                                                                 
+    import src.analysis.screener                                                                              
+    import src.analysis.optimizer                                                                             
+    import src.analysis.ai_analyst                                                                            
+    import src.analysis.batch_ai_audit                                                                        
+    import src.data.ingestion                                                                                 
+    import src.analysis.backtester                                                                            
+    import src.db.setup                                                                                       
+    import src.db.helpers                                                                                     
+                                                                                                                
+    # Apply monkeypatching BEFORE initializing schema                                                         
+    monkeypatch.setattr(src.db.helpers, "get_db", fake_get_db)                                                
+    monkeypatch.setattr(src.analysis.screener, "get_db", fake_get_db)                                         
+    monkeypatch.setattr(src.analysis.optimizer, "get_db", fake_get_db)                                        
+    monkeypatch.setattr(src.analysis.batch_ai_audit, "get_db", fake_get_db, raising=False)                    
+    monkeypatch.setattr(src.data.ingestion, "get_db", fake_get_db)                                            
+    monkeypatch.setattr(src.analysis.ai_analyst, "get_db", fake_get_db, raising=False)                        
     monkeypatch.setattr(src.analysis.backtester, "get_db", fake_get_db, raising=False)
     monkeypatch.setattr(src.db.setup, "get_db", fake_get_db)
-    
     # We may also need to patch UI modules if they are imported by tests
     try:
         import ui.database_tab

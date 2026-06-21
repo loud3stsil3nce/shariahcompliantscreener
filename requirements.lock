@@ -92,3 +92,6 @@ uvicorn==0.49.0
 watchdog==6.0.0
 websockets==16.0
 yfinance==1.4.1
+asyncpg
+SQLAlchemy
+nest_asyncio   

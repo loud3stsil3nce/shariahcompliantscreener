@@ -374,15 +374,16 @@ def isolated_db(tmp_path, monkeypatch):
         conn.row_factory = sqlite3.Row
         return conn
 
-    # Apply monkeypatching to intercept DB_PATH and get_db across all entrypoints
+# Apply monkeypatching to intercept DB_PATH and get_db across all entrypoints
     monkeypatch.setattr("src.db.helpers.DB_PATH", str(db_file))
-    monkeypatch.setattr("src.db.helpers.get_db", mock_get_db)
+    monkeypatch.setattr("src.db.helpers.get_db", mock_get_db)  
     monkeypatch.setattr("src.analysis.screener.get_db", mock_get_db)
     monkeypatch.setattr("src.analysis.optimizer.get_db", mock_get_db)
+    monkeypatch.setattr("src.analysis.batch_ai_audit.get_db", mock_get_db, raising=False)
     monkeypatch.setattr("src.data.ingestion.get_db", mock_get_db)
-    monkeypatch.setattr("ui.database_tab.get_db", mock_get_db)
+    monkeypatch.setattr("ui.database_tab.get_db", mock_get_db)   
     monkeypatch.setattr("ui.explorer_tab.get_db", mock_get_db)
-    monkeypatch.setattr("ui.rules_tab.get_db", mock_get_db)
+    monkeypatch.setattr("ui.rules_tab.get_db", mock_get_db)   
     monkeypatch.setattr("src.db.setup.get_db", mock_get_db)
     
     # Initialize schema using production setup (fully synchronized)
