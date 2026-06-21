@@ -71,11 +71,15 @@ class AsyncpgCursor:
                                                                                                                 
     def execute(self, query, params=None):                                                                    
         # 1. Translate SQLite metadata queries to Postgres                                                    
-        if "sqlite_master" in query:                                                                          
-            query = (query.replace("sqlite_master", "information_schema.tables")                            
-                            .replace("name='stocks'", "table_name='stocks'")                                 
-                            .replace("name FROM", "table_name as name FROM")                                    
-                            .replace("type='table' AND", ""))                                                  
+        if "sqlite_master" in query:
+            query = query.replace("sqlite_master", "information_schema.tables")
+            query = query.replace("name FROM", "table_name as name FROM")
+            query = query.replace("type='table' AND", "")
+            query = re.sub(r"\bname\s*=\s*", "table_name=", query)
+            if "WHERE" in query:
+                query = query.replace("WHERE", "WHERE table_schema='public' AND")
+            else:
+                query += " WHERE table_schema='public'"                                                
                                                                                                                 
         # 2. Translate SQLite PRAGMA commands to standard Postgres column checks                              
         if "PRAGMA table_info" in query:                                                                      
