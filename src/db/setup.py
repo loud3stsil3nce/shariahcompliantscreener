@@ -1,127 +1,141 @@
-import pandas as pd
-from src.db.helpers import get_db
-
-# Initialize database tables if they don't exist
-def init_db_tables():
-    conn = get_db()
-    # USE executescript for multiple statements or safer schema management
-    conn.executescript("""
-        CREATE TABLE IF NOT EXISTS stocks (
-            ticker TEXT PRIMARY KEY,
-            name TEXT,
-            sector TEXT,
-            industry TEXT,
-            total_assets REAL,
-            total_debt REAL,
-            cash_equivalents REAL,
-            accounts_receivable REAL,
-            total_revenue REAL,
-            interest_income REAL,
-            shares_outstanding REAL,
-            avg_market_cap_36mo REAL,
-            raw_info TEXT,
-            sec_filing_url TEXT,
-            fetched_at TEXT
-        );
-        CREATE TABLE IF NOT EXISTS ai_overrides (
-            ticker TEXT PRIMARY KEY,
-            haram_revenue_estimate REAL,
-            reasoning TEXT,
-            segments_found TEXT,
-            updated_at TEXT
-        );
-        CREATE TABLE IF NOT EXISTS manual_overrides (
-            ticker TEXT PRIMARY KEY,
-            haram_revenue_override REAL,
-            debt_ratio_override REAL,
-            cash_ratio_override REAL,
-            receivables_ratio_override REAL,
-            tangibility_ratio_override REAL,
-            interest_income_override REAL,
-            doubtful_revenue_override REAL,
-            reasoning TEXT,
-            is_user_override INTEGER DEFAULT 0,
-            updated_at TEXT
-        );
-        CREATE TABLE IF NOT EXISTS halal_universe (
-            ticker TEXT PRIMARY KEY,
-            name TEXT,
-            sector TEXT,
-            industry TEXT,
-            total_assets REAL,
-            total_debt REAL,
-            cash_equivalents REAL,
-            accounts_receivable REAL,
-            total_revenue REAL,
-            interest_income REAL,
-            shares_outstanding REAL,
-            avg_market_cap_36mo REAL,
-            raw_info TEXT,
-            sec_filing_url TEXT,
-            fetched_at TEXT,
-            grade TEXT,
-            compliance_score REAL,
-            debt_ratio REAL,
-            cash_ratio REAL,
-            tangibility_ratio REAL,
-            total_haram_ratio REAL,
-            doubtful_ratio REAL,
-            total_combined_ratio REAL,
-            purification_per_share REAL
-        );
-        CREATE TABLE IF NOT EXISTS doubtful_universe (
-            ticker TEXT PRIMARY KEY,
-            name TEXT,
-            sector TEXT,
-            industry TEXT,
-            total_assets REAL,
-            total_debt REAL,
-            cash_equivalents REAL,
-            accounts_receivable REAL,
-            total_revenue REAL,
-            interest_income REAL,
-            shares_outstanding REAL,
-            avg_market_cap_36mo REAL,
-            raw_info TEXT,
-            sec_filing_url TEXT,
-            fetched_at TEXT,
-            grade TEXT,
-            compliance_score REAL,
-            debt_ratio REAL,
-            cash_ratio REAL,
-            tangibility_ratio REAL,
-            total_haram_ratio REAL,
-            doubtful_ratio REAL,
-            total_combined_ratio REAL,
-            purification_per_share REAL
-        );
-        CREATE TABLE IF NOT EXISTS halal_rejections (
-            ticker TEXT PRIMARY KEY,
-            name TEXT,
-            sector TEXT,
-            industry TEXT,
-            total_assets REAL,
-            total_debt REAL,
-            cash_equivalents REAL,
-            accounts_receivable REAL,
-            total_revenue REAL,
-            interest_income REAL,
-            shares_outstanding REAL,
-            avg_market_cap_36mo REAL,
-            raw_info TEXT,
-            sec_filing_url TEXT,
-            fetched_at TEXT,
-            grade TEXT,
-            compliance_score REAL,
-            debt_ratio REAL,
-            cash_ratio REAL,
-            tangibility_ratio REAL,
-            total_haram_ratio REAL,
-            total_combined_ratio REAL,
-            halal_failure TEXT,
-            purification_per_share REAL
-        );
-    """)
+import pandas as pd                                                                                           
+from src.db.helpers import get_db, run_sync, ASYNC_DB_URL, AsyncpgConnection                                                    
+from src.db.models import Base                                                                                
+from sqlalchemy.ext.asyncio import create_async_engine                                                        
+                                                                                                               
+# Initialize database tables if they don't exist                                                              
+def init_db_tables():                                                                                         
+    conn = get_db() 
+    # A. If we are running tests (monkeypatched to return a SQLite connection), run SQLite DDL                
+    if hasattr(conn, "executescript") and not isinstance(conn, AsyncpgConnection):                            
+        conn.executescript("""                                                                                
+            CREATE TABLE IF NOT EXISTS stocks (                                                               
+                ticker TEXT PRIMARY KEY,                                                                      
+                name TEXT,                                                                                    
+                sector TEXT,                                                                                  
+                industry TEXT,                                                                                
+                total_assets REAL,                                                                            
+                total_debt REAL,                                                                              
+                cash_equivalents REAL,                                                                        
+                accounts_receivable REAL,                                                                     
+                total_revenue REAL,                                                                           
+                interest_income REAL,                                                                         
+                shares_outstanding REAL,                                                                      
+                avg_market_cap_36mo REAL,                                                                     
+                raw_info TEXT,                                                                                
+                sec_filing_url TEXT,                                                                          
+                fetched_at TEXT                                                                               
+            );                                                                                                
+            CREATE TABLE IF NOT EXISTS ai_overrides (                                                         
+                ticker TEXT PRIMARY KEY,                                                                      
+                haram_revenue_estimate REAL,                                                                  
+                reasoning TEXT,                                                                               
+                segments_found TEXT,                                                                          
+                updated_at TEXT                                                                               
+            );                                                                                                
+            CREATE TABLE IF NOT EXISTS manual_overrides (                                                     
+                ticker TEXT PRIMARY KEY,                                                                      
+                haram_revenue_override REAL,                                                                  
+                debt_ratio_override REAL,                                                                     
+                cash_ratio_override REAL,                                                                     
+                receivables_ratio_override REAL,                                                              
+                tangibility_ratio_override REAL,                                                              
+                interest_income_override REAL,                                                                
+                doubtful_revenue_override REAL,                                                               
+                reasoning TEXT,                                                                               
+                is_user_override INTEGER DEFAULT 0,                                                           
+                updated_at TEXT                                                                               
+            );                                                                                                
+            CREATE TABLE IF NOT EXISTS halal_universe (                                                       
+                ticker TEXT PRIMARY KEY,                                                                      
+                name TEXT,                                                                                    
+                sector TEXT,                                                                                  
+                industry TEXT,                                                                                
+                total_assets REAL,                                                                            
+                total_debt REAL,                                                                              
+                cash_equivalents REAL,                                                                        
+                accounts_receivable REAL,                                                                     
+                total_revenue REAL,                                                                           
+                interest_income REAL,                                                                         
+                shares_outstanding REAL,                                                                      
+                avg_market_cap_36mo REAL,                                                                     
+                raw_info TEXT,                                                                                
+                sec_filing_url TEXT,                                                                          
+                fetched_at TEXT,                                                                              
+                grade TEXT,                                                                                   
+                compliance_score REAL,                                                                        
+                debt_ratio REAL,                                                                              
+                cash_ratio REAL,                                                                              
+                tangibility_ratio REAL,                                                                       
+                total_haram_ratio REAL,                                                                       
+                doubtful_ratio REAL,                                                                          
+                total_combined_ratio REAL,                                                                    
+                purification_per_share REAL                                                                   
+            );                                                                                                
+            CREATE TABLE IF NOT EXISTS doubtful_universe (                                                    
+                ticker TEXT PRIMARY KEY,                                                                      
+                name TEXT,                                                                                    
+                sector TEXT,                                                                                  
+                industry TEXT,                                                                                
+                total_assets REAL,                                                                            
+                total_debt REAL,                                                                              
+                cash_equivalents REAL,                                                                        
+                accounts_receivable REAL,                                                                     
+                total_revenue REAL,                                                                           
+                interest_income REAL,                                                                         
+                shares_outstanding REAL,                                                                      
+                avg_market_cap_36mo REAL,                                                                     
+                raw_info TEXT,                                                                                
+                sec_filing_url TEXT,                                                                          
+                fetched_at TEXT,                                                                              
+                grade TEXT,                                                                                   
+                compliance_score REAL,                                                                        
+                debt_ratio REAL,                                                                              
+                cash_ratio REAL,                                                                              
+                tangibility_ratio REAL,                                                                       
+                total_haram_ratio REAL,                                                                       
+                doubtful_ratio REAL,                                                                          
+                total_combined_ratio REAL,                                                                    
+                purification_per_share REAL                                                                   
+            );                                                                                                
+            CREATE TABLE IF NOT EXISTS halal_rejections (                                                     
+                ticker TEXT PRIMARY KEY,                                                                      
+                name TEXT,                                                                                    
+                sector TEXT,                                                                                  
+                industry TEXT,                                                                                
+                total_assets REAL,                                                                            
+                total_debt REAL,                                                                              
+                cash_equivalents REAL,                                                                        
+                accounts_receivable REAL,                                                                     
+                total_revenue REAL,                                                                           
+                interest_income REAL,                                                                         
+                shares_outstanding REAL,                                                                      
+                avg_market_cap_36mo REAL,                                                                     
+                raw_info TEXT,                                                                                
+                sec_filing_url TEXT,                                                                          
+                fetched_at TEXT,                                                                              
+                grade TEXT,
+                compliance_score REAL,
+                debt_ratio REAL,
+                cash_ratio REAL,
+                tangibility_ratio REAL,
+                total_haram_ratio REAL,
+                total_combined_ratio REAL,
+                halal_failure TEXT,
+                purification_per_share REAL
+            );
+        """)
+    else:
+        # B. If we are running in production, create tables via SQLAlchemy models on PostgreSQL                                                                 
+        async def _init():                                                                                        
+            engine = create_async_engine(ASYNC_DB_URL)                                                            
+            async with engine.begin() as conn:                                                                    
+                await conn.run_sync(Base.metadata.create_all)                                                     
+            await engine.dispose()                                                                                
+                                                                                                                
+        run_sync(_init())                                                                                         
+                                                                                                                
+    
     
     # Schema migration: check if stocks table exists and has sec_filing_url column
     table_check = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='stocks'").fetchone()
