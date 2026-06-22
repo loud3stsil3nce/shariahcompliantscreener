@@ -154,3 +154,8 @@ class TradeProposal(Base):
     user_id: Mapped[str] = mapped_column(ForeignKey("platform_users.id"))
     
     user: Mapped["User"] = relationship()
+
+class Watchlist(Base):
+    __tablename__ = "watchlist"
+    
+    ticker: Mapped[str] = mapped_column(String(10), primary_key=True)

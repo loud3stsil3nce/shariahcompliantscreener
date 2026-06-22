@@ -124,6 +124,9 @@ def init_db_tables():
                 halal_failure TEXT,
                 purification_per_share REAL
             );
+            CREATE TABLE IF NOT EXISTS watchlist (
+                ticker TEXT PRIMARY KEY
+            );
         """)
     else:
         # B. If we are running in production, create tables via SQLAlchemy models on PostgreSQL                                                                 

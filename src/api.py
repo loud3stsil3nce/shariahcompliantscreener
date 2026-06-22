@@ -12,7 +12,9 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
-
+from mcp.server.fastmcp import FastMCP                                                                                                                                                                                                                                                          
+from mcp.server.sse import SseServerTransport                                                                                                                                                                                                                                                   
+ 
 from src.db.helpers import ASYNC_DB_URL, get_db
 from src.db.models import (
     Base,
@@ -23,16 +25,155 @@ from src.db.models import (
     AIOverride,
     ComplianceScan,
     TradeProposal,
-    Stock
+    Stock,
+    Watchlist
 )
-from src.data.ingestion import run_ingestion, fetch_stock_with_retry
+from src.data.ingestion import run_ingestion, fetch_stock_with_retry, init_db
 from src.analysis.screener import run_screener, get_effective_override, MAX_DEBT_RATIO, MAX_CASH_RATIO, MIN_TANGIBILITY_RATIO, MAX_LIQUID_RATIO, MAX_HARAM_INCOME_RATIO, HARAM_SECTORS, HARAM_INDUSTRY_KEYWORDS
 from src.analysis.optimizer import run_optimizer
 from src.analysis.backtester import run_backtest
 
+def ingest_single_ticker(ticker: str):
+    conn = get_db()
+    init_db(conn)
+    ticker_upper = ticker.upper().strip()
+    data = fetch_stock_with_retry(ticker_upper)
+    if data:
+        conn.execute(
+            """INSERT OR REPLACE INTO stocks (
+                ticker, name, sector, industry,
+                total_assets, total_debt, cash_equivalents, accounts_receivable,
+                total_revenue, interest_income,
+                shares_outstanding, avg_market_cap_36mo, raw_info, sec_filing_url, fetched_at
+            ) VALUES (
+                :ticker, :name, :sector, :industry,
+                :total_assets, :total_debt, :cash_equivalents, :accounts_receivable,
+                :total_revenue, :interest_income,
+                :shares_outstanding, :avg_market_cap_36mo, :raw_info, :sec_filing_url, :fetched_at
+            )""",
+            data,
+        )
+        conn.commit()
+    conn.close()
+
 # 1. Initialize FastAPI & enable CORS
 app = FastAPI(title="Shariah Screener API")
+mcp = FastMCP("Screener Tools")
 
+@app.on_event("startup")
+def startup_event():
+    from src.db.setup import init_db_tables
+    try:
+        init_db_tables()
+        print("Database initialized successfully.")
+    except Exception as e:
+        print(f"Error initializing database: {e}")
+
+
+# mcp tools:
+@mcp.tool()
+async def run_screener_scan(ticker: str) -> str:
+    """
+    Triggers a live Shariah compliance scan for a stock ticker.
+    Returns compliance status (HALAL, DOUBTFUL, HARAM) and diagnostic details.
+    """
+    # Call the existing ingestion and screener pipeline
+    try:
+        # Ingest raw financial data from Yahoo Finance in a background thread to prevent event loop deadlock
+        import asyncio
+        await asyncio.to_thread(ingest_single_ticker, ticker)
+
+        # Run screener logic which reads from database, runs ratio logic, and outputs classifications
+        await asyncio.to_thread(run_screener)
+
+        ticker_upper = ticker.upper().strip()
+        async with AsyncSessionLocal() as session:
+            # Check Halal Universe
+            res = await session.execute(select(HalalUniverse).where(HalalUniverse.ticker == ticker_upper))
+            halal_rec = res.scalar_one_or_none()
+            if halal_rec:
+                data = {
+                    "ticker": halal_rec.ticker,
+                    "name": halal_rec.name,
+                    "status": "HALAL",
+                    "grade": halal_rec.grade,
+                    "compliance_score": halal_rec.compliance_score,
+                    "debt_ratio": halal_rec.debt_ratio,
+                    "cash_ratio": halal_rec.cash_ratio,
+                    "tangibility_ratio": halal_rec.tangibility_ratio,
+                    "total_haram_ratio": halal_rec.total_haram_ratio,
+                    "purification_per_share": halal_rec.purification_per_share
+                }
+                return f"Compliance analysis for {ticker_upper}: {json.dumps(data, indent=2)}"
+
+            # Check Doubtful Universe
+            res = await session.execute(select(DoubtfulUniverse).where(DoubtfulUniverse.ticker == ticker_upper))
+            doubtful_rec = res.scalar_one_or_none()
+            if doubtful_rec:
+                data = {
+                    "ticker": doubtful_rec.ticker,
+                    "name": doubtful_rec.name,
+                    "status": "DOUBTFUL",
+                    "grade": doubtful_rec.grade,
+                    "compliance_score": doubtful_rec.compliance_score,
+                    "debt_ratio": doubtful_rec.debt_ratio,
+                    "cash_ratio": doubtful_rec.cash_ratio,
+                    "tangibility_ratio": doubtful_rec.tangibility_ratio,
+                    "total_haram_ratio": doubtful_rec.total_haram_ratio,
+                    "purification_per_share": doubtful_rec.purification_per_share
+                }
+                return f"Compliance analysis for {ticker_upper}: {json.dumps(data, indent=2)}"
+
+            # Check Halal Rejections
+            res = await session.execute(select(HalalRejection).where(HalalRejection.ticker == ticker_upper))
+            rejection_rec = res.scalar_one_or_none()
+            if rejection_rec:
+                data = {
+                    "ticker": rejection_rec.ticker,
+                    "name": rejection_rec.name,
+                    "status": "HARAM",
+                    "grade": rejection_rec.grade,
+                    "compliance_score": rejection_rec.compliance_score,
+                    "debt_ratio": rejection_rec.debt_ratio,
+                    "cash_ratio": rejection_rec.cash_ratio,
+                    "tangibility_ratio": rejection_rec.tangibility_ratio,
+                    "total_haram_ratio": rejection_rec.total_haram_ratio,
+                    "purification_per_share": rejection_rec.purification_per_share,
+                    "halal_failure": rejection_rec.halal_failure
+                }
+                return f"Compliance analysis for {ticker_upper}: {json.dumps(data, indent=2)}"
+
+        return f"No compliance result found for {ticker_upper} in database."
+    except Exception as e:
+        return f"Error running compliance check for {ticker}: {str(e)}"                                                                                                                                                                                                                         
+                                                                                                                                                                                                                                                                                                
+@mcp.tool()                                                                                                                                                                                                                                                                                     
+async def get_screener_watchlist() -> List[str]:                                                                                                                                                                                                                                                
+    """                                                                                                                                                                                                                                                                                         
+    Retrieves all stock tickers currently on the Shariah audit watchlist.                                                                                                                                                                                                                       
+    """                                                                                                                                                                                                                                                                                         
+    async with AsyncSessionLocal() as session:                                                                                                                                                                                                                                                  
+        result = await session.execute(select(Watchlist.ticker))                                                                                                                                                                                                                                
+        return list(result.scalars().all())                                                                                                                                                                                                                                                     
+                                                                                                                                                                                                                                                                                                
+@mcp.tool()                                                                                                                                                                                                                                                                                     
+async def add_to_watchlist(ticker: str) -> str:
+    """
+    Adds a new stock ticker to the Shariah audit watchlist.
+    """
+    ticker_upper = ticker.upper().strip()
+    async with AsyncSessionLocal() as session:
+        async with session.begin():
+            # Check if already exists
+            existing = await session.get(Watchlist, ticker_upper)
+            if existing:
+                return f"{ticker_upper} is already on the watchlist."
+
+            new_entry = Watchlist(ticker=ticker_upper)
+            session.add(new_entry)
+        return f"Successfully added {ticker_upper} to the watchlist."
+   
+    
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # Adjust for production if needed
@@ -724,3 +865,25 @@ async def get_mcp_status():
         return data
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to read telemetry status: {str(e)}")
+    
+    
+    
+from fastapi import Request
+mcp_transport = SseServerTransport("/mcp/messages/")
+  
+@app.get("/mcp/sse")
+async def handle_mcp_sse(request: Request):
+    async with mcp_transport.connect_sse(
+        request.scope, request.receive, request._send
+    ) as (in_stream, out_stream):
+        await mcp._mcp_server.run(
+            in_stream,
+            out_stream,
+            mcp._mcp_server.create_initialization_options()
+        )
+
+@app.post("/mcp/messages/")
+async def handle_mcp_messages(request: Request):
+    return await mcp_transport.handle_post_message(
+        request.scope, request.receive, request._send
+    )
