@@ -8,6 +8,26 @@ import pandas as pd
 import requests
 from bs4 import BeautifulSoup
 import google.generativeai as genai
+import random
+
+# --- User Agents for rotating to avoid 429/rate limits ---
+USER_AGENTS = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:125.0) Gecko/20100101 Firefox/125.0",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:125.0) Gecko/20100101 Firefox/125.0",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36 Edg/125.0.0.0",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+]
+
+def get_random_headers():
+    return {
+        "User-Agent": random.choice(USER_AGENTS),
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Connection": "keep-alive",
+        "Upgrade-Insecure-Requests": "1"
+    }
 
 # --- API keys
 load_dotenv_status = False
@@ -265,18 +285,33 @@ async def fetch_transcript(ticker, year=2025, quarter=4):
         except Exception as e:
             print(f"❌ [Harvester] [Transcript] Alpha Vantage API query encountered an error: {e}")
 
-    # 3. Fallback: Search Google for the transcript text
-    print(f"⚠️ [Harvester] [Transcript] Direct APIs unavailable or returned empty. Falling back to Google scraping...")
+    # 3. Fallback: Search Google/SerpAPI for the transcript text
+    print(f"⚠️ [Harvester] [Transcript] Direct APIs unavailable or returned empty. Falling back to search...")
     search_query = f"{ticker} Q{quarter} {year} earnings call transcript Motley Fool"
-    print(f"🔍 [Harvester] [Transcript] Scraping Google results for query: '{search_query}'")
-    urls = await search_google_urls(search_query)
+    urls = []
+    serp_key = os.getenv("SERPAPI_API_KEY")
+    if serp_key:
+        print(f"🔌 [Harvester] [Transcript] Using SerpAPI to search for transcript...")
+        url = f"https://serpapi.com/search.json?q={urllib.parse.quote(search_query)}&api_key={serp_key}"
+        try:
+            r = await asyncio.to_thread(requests.get, url, timeout=15)
+            if r.status_code == 200:
+                results = r.json()
+                org_results = results.get("organic_results", [])
+                urls = [res.get("link", "") for res in org_results if res.get("link")]
+        except Exception as e:
+            print(f"❌ [Harvester] [Transcript] SerpAPI search failed: {e}")
+            
+    if not urls:
+        print(f"🔍 [Harvester] [Transcript] Scraping Google results for query: '{search_query}'")
+        urls = await search_google_urls(search_query)
     
-    for url in urls[:2]:
+    for url in urls[:3]:
         if "fool.com" in url or "seekingalpha.com" in url or "transcript" in url.lower():
+            await asyncio.sleep(random.uniform(0.5, 1.5))
             print(f"🌐 [Harvester] [Transcript] Attempting to scrape text from: {url}")
             try:
-                headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
-                r = await asyncio.to_thread(requests.get, url, headers=headers, timeout=15)
+                r = await asyncio.to_thread(requests.get, url, headers=get_random_headers(), timeout=15)
                 if r.status_code == 200:
                     soup = BeautifulSoup(r.text, 'html.parser')
                     body = soup.find(class_="tail-content") or soup.find(class_="article-body") or soup.find("article")
@@ -285,7 +320,20 @@ async def fetch_transcript(ticker, year=2025, quarter=4):
                         if "transcript" in text.lower() or "call" in text.lower():
                             print(f"✅ [Harvester] [Transcript] Successfully scraped transcript from web page ({len(text)} characters).")
                             return text
-                print(f"⚠️ [Harvester] [Transcript] Scrape returned status {r.status_code} or text not found on page.")
+                elif r.status_code == 429:
+                    print(f"⚠️ [Harvester] [Transcript] Scrape returned status 429. Retrying after sleep...")
+                    await asyncio.sleep(3.0)
+                    r = await asyncio.to_thread(requests.get, url, headers=get_random_headers(), timeout=15)
+                    if r.status_code == 200:
+                        soup = BeautifulSoup(r.text, 'html.parser')
+                        body = soup.find(class_="tail-content") or soup.find(class_="article-body") or soup.find("article")
+                        if body:
+                            text = body.get_text(" ")
+                            if "transcript" in text.lower() or "call" in text.lower():
+                                print(f"✅ [Harvester] [Transcript] Successfully scraped transcript on retry ({len(text)} characters).")
+                                return text
+                else:
+                    print(f"⚠️ [Harvester] [Transcript] Scrape returned status {r.status_code} or text not found on page.")
             except Exception as e:
                 print(f"❌ [Harvester] [Transcript] Failed to scrape transcript page {url}: {e}")
                 
@@ -330,14 +378,11 @@ async def search_ir_presentation_pdf(ticker, year=2025, quarter=4):
 async def search_google_urls(query):
     """Scrape Google Search for URLs as a zero-dependency fallback."""
     urls = []
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
-    }
     encoded_query = urllib.parse.quote(query)
     url = f"https://www.google.com/search?q={encoded_query}"
     
     try:
-        r = await asyncio.to_thread(requests.get, url, headers=headers, timeout=10)
+        r = await asyncio.to_thread(requests.get, url, headers=get_random_headers(), timeout=10)
         if r.status_code == 200:
             soup = BeautifulSoup(r.text, 'html.parser')
             for a in soup.find_all('a', href=True):
@@ -375,7 +420,7 @@ async def download_pdf_text(url):
     return ""
 
 # --- SerpAPI → Google scraping, then scrapes top pages and returns snippets + short scrapes ---
-async def search_web_evidence(query, num_results=3):
+async def search_web_evidence(query, num_results=8):
     """
     Query SerpAPI or scrape Google for a query, and return a concatenated 
     text block of search result titles, snippets, and scraped page texts.
@@ -414,11 +459,16 @@ async def search_web_evidence(query, num_results=3):
     
     # Scrape content from the top URLs to gather deep text evidence
     scraped_count = 0
-    for url_link in urls_to_scrape[:2]:
+    unique_urls = []
+    for u in urls_to_scrape:
+        if u not in unique_urls:
+            unique_urls.append(u)
+            
+    for url_link in unique_urls[:5]:
+        await asyncio.sleep(random.uniform(0.8, 2.0))
         print(f"🌐 [Harvester] [Web Search] Scraping deep text content from: {url_link}")
         try:
-            headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
-            r = await asyncio.to_thread(requests.get, url_link, headers=headers, timeout=10)
+            r = await asyncio.to_thread(requests.get, url_link, headers=get_random_headers(), timeout=12)
             if r.status_code == 200:
                 soup = BeautifulSoup(r.text, 'html.parser')
                 # Strip scripts/styles
@@ -428,9 +478,24 @@ async def search_web_evidence(query, num_results=3):
                 # Clean whitespace
                 cleaned_text = " ".join(text.split())
                 # Limit characters to avoid overloading context
-                evidence_parts.append(f"\n[Scraped Content from {url_link}]:\n{cleaned_text[:3000]}\n")
+                evidence_parts.append(f"\n[Scraped Content from {url_link}]:\n{cleaned_text[:5000]}\n")
                 scraped_count += 1
                 print(f"✅ [Harvester] [Web Search] Scraped successfully ({len(cleaned_text)} characters).")
+            elif r.status_code == 429:
+                print(f"⚠️ [Harvester] [Web Search] Scrape request returned 429. Retrying after sleep...")
+                await asyncio.sleep(3.0)
+                r = await asyncio.to_thread(requests.get, url_link, headers=get_random_headers(), timeout=12)
+                if r.status_code == 200:
+                    soup = BeautifulSoup(r.text, 'html.parser')
+                    for s in soup(["script", "style", "nav", "footer", "header"]):
+                        s.decompose()
+                    text = soup.get_text(" ")
+                    cleaned_text = " ".join(text.split())
+                    evidence_parts.append(f"\n[Scraped Content from {url_link}]:\n{cleaned_text[:5000]}\n")
+                    scraped_count += 1
+                    print(f"✅ [Harvester] [Web Search] Scraped successfully on retry ({len(cleaned_text)} characters).")
+                else:
+                    print(f"❌ [Harvester] [Web Search] Scrape request failed after retry: status {r.status_code}")
             else:
                 print(f"⚠️ [Harvester] [Web Search] Scrape request returned status: {r.status_code}")
         except Exception as e:
@@ -452,16 +517,35 @@ async def harvest_all_sources(ticker, year=2025, quarter=4, sec_text=None):
     transcript_task = fetch_transcript(ticker, year, quarter)
     pdf_url_task = search_ir_presentation_pdf(ticker, year, quarter)
     
-    # Target web search for segment details
-    web_search_query = f"{ticker} segment revenue split breakdown {year}"
-    web_search_task = search_web_evidence(web_search_query)
+    # Target web search for segment and Shariah breakdown details
+    company_name = ticker
+    try:
+        from src.db.helpers import get_db
+        conn = get_db()
+        row = conn.execute("SELECT name FROM stocks WHERE ticker = ?", (ticker,)).fetchone()
+        if row and row["name"]:
+            company_name = row["name"]
+        conn.close()
+    except Exception:
+        pass
+
+    queries = [
+        f"{ticker} segment revenue split breakdown {year}",
+        f"{ticker} subsegment subscriber count OR pricing OR ARPU OR revenue split Music TV Card {year}",
+        f"{ticker} Shariah compliance Musaffa revenue split",
+        f"{company_name} subscription services subscriber counts pricing ARPU {year}"
+    ]
+    web_search_tasks = [search_web_evidence(q) for q in queries]
     
     # Run parallel
-    transcript_text, pdf_url, web_search_evidence = await asyncio.gather(
+    results = await asyncio.gather(
         transcript_task, 
         pdf_url_task, 
-        web_search_task
+        *web_search_tasks
     )
+    transcript_text = results[0]
+    pdf_url = results[1]
+    web_search_evidence = "\n\n".join(results[2:])
     
     pdf_text = ""
     if pdf_url:

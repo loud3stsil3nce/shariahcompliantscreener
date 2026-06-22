@@ -168,12 +168,12 @@ def fetch_stock(ticker: str) -> dict | None:
         lt_securities = 0.0
     cash_and_securities = total_cash_st + lt_securities
 
-    # 2. Interest Income (actual from financials, or deduced using a 3.0% yield proxy if missing/nan/0)
+    # 2. Interest Income (actual from financials, or 0.0 if missing/nan)
     interest_inc = get_recent_val(financials, "Interest Income", 0.0)
     if interest_inc == 0.0 or pd.isna(interest_inc):
         interest_inc = get_recent_val(financials, "Interest Income Non Operating", 0.0)
-    if interest_inc == 0.0 or pd.isna(interest_inc):
-        interest_inc = cash_and_securities * 0.03
+    if pd.isna(interest_inc):
+        interest_inc = 0.0
 
     # Clean dictionary with only raw data, no compliance logic here
     record = {

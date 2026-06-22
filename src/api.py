@@ -539,9 +539,8 @@ async def run_ai_audit(ticker: str, data: AuditInput):
         final_doubtful_rev = doubtful_rev_m / total_rev_m
         final_int_inc_ratio = int_inc_m / total_rev_m
         cash_and_securities_m = ai_res.get('total_cash_and_securities_millions', 0.0) or 0.0
-        if final_int_inc_ratio == 0.0 and cash_and_securities_m > 0.0:
-            annual_rev_m = (stock_data.get('total_revenue', 0.0) or 1.0) / 1e6
-            final_int_inc_ratio = (cash_and_securities_m * 0.03) / annual_rev_m
+        if final_int_inc_ratio == 0.0 and stock_data['total_revenue'] and stock_data['total_revenue'] > 0.0:
+            final_int_inc_ratio = (stock_data['interest_income'] or 0.0) / stock_data['total_revenue']
             
         final_debt_ratio = (ai_res.get('interest_bearing_debt_millions', 0.0) * 1e6) / mc_denom_save
         final_cash_ratio = (cash_and_securities_m * 1e6) / mc_denom_save
@@ -651,9 +650,8 @@ async def run_document_upload_audit(ticker: str, file: UploadFile = File(...)):
         final_doubtful_rev = doubtful_rev_m / total_rev_m
         final_int_inc_ratio = int_inc_m / total_rev_m
         cash_and_securities_m = ai_res.get('total_cash_and_securities_millions', 0.0) or 0.0
-        if final_int_inc_ratio == 0.0 and cash_and_securities_m > 0.0:
-            annual_rev_m = (stock_data.get('total_revenue', 0.0) or 1.0) / 1e6
-            final_int_inc_ratio = (cash_and_securities_m * 0.03) / annual_rev_m
+        if final_int_inc_ratio == 0.0 and stock_data['total_revenue'] and stock_data['total_revenue'] > 0.0:
+            final_int_inc_ratio = (stock_data['interest_income'] or 0.0) / stock_data['total_revenue']
             
         final_debt_ratio = (ai_res.get('interest_bearing_debt_millions', 0.0) * 1e6) / mc_denom_save
         final_cash_ratio = (cash_and_securities_m * 1e6) / mc_denom_save

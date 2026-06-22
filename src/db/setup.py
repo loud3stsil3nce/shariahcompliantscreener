@@ -179,7 +179,6 @@ def init_db_tables():
     count = conn.execute("SELECT COUNT(*) FROM shariah_segment_map").fetchone()[0]
     if count == 0:
         default_rules = [
-            ("AAPL", "Services", "doubtful", "Contains Apple Music, Apple TV+, and Apple Card. Estimate that these represent exactly 13.0% of the Services segment. Classify the Apple Card portion (1.5% of Services) as Haram and the remaining mixed streaming/media portion (11.5% of Services) as Doubtful."),
             ("ABBV", "Aesthetics", "haram", "Under the Cosmetic Aesthetics Rule, the entire 'Aesthetics' segment (including Botox Cosmetic, Juvederm, and Other Aesthetics) is 100% Haram/non-compliant revenue. Do NOT exclude Botox Cosmetic or Juvederm from the Haram revenue calculation."),
             ("SPCX", "AI", "doubtful", "AI or AI/X segment includes the X platform (social media and digital advertising), Grok, and AI computational infrastructure. Per the Digital Advertising Rule, this segment is classified as Doubtful (5.0% of total revenue if granular data is missing, or the entire segment if reported).")
         ]
@@ -206,7 +205,6 @@ def init_db_tables():
     count_cur = conn.execute("SELECT COUNT(*) FROM curated_benchmarks").fetchone()[0]
     if count_cur == 0:
         default_curated = [
-            ("AAPL", 0.0312, 0.0, 0.0096, 0.0447, 0.0262, pd.Timestamp.now().isoformat()),
             ("MSFT", 0.0760, 0.0, 0.0094, 0.0315, 0.0197, pd.Timestamp.now().isoformat()),
             ("GOOG", 0.0, 0.7200, 0.0108, None, None, pd.Timestamp.now().isoformat()),
             ("GOOGL", 0.0, 0.7200, 0.0108, None, None, pd.Timestamp.now().isoformat()),

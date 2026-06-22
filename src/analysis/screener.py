@@ -24,40 +24,10 @@ HARAM_INDUSTRY_KEYWORDS = [
     "adult",
     "pork",
 ]
-CURATED_BENCHMARKS = {
-        "AAPL": {
-            "doubtful_revenue_override": 0.0312,
-            "interest_income_override": 0.0096,
-            "cash_ratio_override": 0.0447,
-            "debt_ratio_override": 0.0262,
-        },
-        "MSFT": {
-            "haram_revenue_override": 0.0760,
-            "interest_income_override": 0.0094,
-            "cash_ratio_override": 0.0315,
-            "debt_ratio_override": 0.0197,
-        },
-        "GOOG": {
-            "doubtful_revenue_override": 0.7200,
-            "interest_income_override": 0.0108,
-        },
-        "GOOGL": {
-            "doubtful_revenue_override": 0.7200,
-            "interest_income_override": 0.0108,
-        },
-        "META": {
-            "doubtful_revenue_override": 0.9800,
-            "interest_income_override": 0.0120,
-        }
-    }
-
 def get_effective_override(row, field):
         db_val = row[field]
         if db_val is not None and not pd.isna(db_val):
             return db_val
-        ticker = str(row["ticker"]).upper().strip()
-        if ticker in CURATED_BENCHMARKS and field in CURATED_BENCHMARKS[ticker]:
-            return CURATED_BENCHMARKS[ticker][field]
         return np.nan
     
 
@@ -75,18 +45,19 @@ def run_screener(use_current_market_cap=False):
         conn.close()
         return
 
-    # Join with manual_overrides to get qualitative estimates and professional corrections
+    # Join with manual_overrides and curated_benchmarks to resolve overrides dynamically
     query = """
         SELECT s.*, 
-               m.haram_revenue_override,
-               m.debt_ratio_override,
-               m.cash_ratio_override,
-               m.receivables_ratio_override,
-               m.tangibility_ratio_override,
-               m.interest_income_override,
-               m.doubtful_revenue_override
+               coalesce(m.haram_revenue_override, cb.haram_revenue_override) as haram_revenue_override,
+               coalesce(m.debt_ratio_override, cb.debt_ratio_override) as debt_ratio_override,
+               coalesce(m.cash_ratio_override, cb.cash_ratio_override) as cash_ratio_override,
+               m.receivables_ratio_override as receivables_ratio_override,
+               coalesce(m.tangibility_ratio_override, cb.tangibility_ratio_override) as tangibility_ratio_override,
+               coalesce(m.interest_income_override, cb.interest_income_override) as interest_income_override,
+               coalesce(m.doubtful_revenue_override, cb.doubtful_revenue_override) as doubtful_revenue_override
         FROM stocks s
         LEFT JOIN manual_overrides m ON s.ticker = m.ticker
+        LEFT JOIN curated_benchmarks cb ON s.ticker = cb.ticker
     """
     df = pd.read_sql_query(query, conn)
     

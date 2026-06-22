@@ -20,15 +20,41 @@ def analyze_company_compliance(ticker, name, summary, source_text=None, db_finan
     """Orchestrator: try Gemini, fall back to OpenAI."""
     """full Shariah Audit, optionally using 10-K source text."""
   
+    conn = None
+    db_rules = []
+    global_patterns = []
+    try:
+        from src.db.helpers import get_db
+        conn = get_db()
+        rules_cursor = conn.execute("SELECT segment_name, compliance_status, notes FROM shariah_segment_map WHERE ticker = ?", (ticker,))
+        db_rules = rules_cursor.fetchall()
+        patterns_cursor = conn.execute("SELECT pattern, compliance_status, notes FROM global_segment_patterns")
+        global_patterns = patterns_cursor.fetchall()
+    except Exception as e:
+        print(f"Error querying database rules: {e}")
+    finally:
+        if conn:
+            conn.close()
+
     db_info = ""
     if db_financials:
-        db_info = f"""
+        db_info += f"""
         BASELINE FINANCIAL DATA FROM DATABASE (for reference/fallback):
         - Total Revenue: ${db_financials.get('total_revenue', 0.0) / 1e6:,.2f} million
         - Total Debt: ${db_financials.get('total_debt', 0.0) / 1e6:,.2f} million
         - Cash and Equivalents: ${db_financials.get('cash_equivalents', 0.0) / 1e6:,.2f} million
         - Interest Income: ${db_financials.get('interest_income', 0.0) / 1e6:,.2f} million
         """
+    
+    if db_rules:
+        db_info += f"\n        KNOWN COMPANY-SPECIFIC RULES FROM DATABASE FOR {ticker}:\n"
+        for rule in db_rules:
+            db_info += f"        - Segment: '{rule['segment_name']}' is classified as {rule['compliance_status'].upper()}. Rules/Notes: {rule['notes']}\n"
+            
+    if global_patterns:
+        db_info += "\n        GLOBAL SEGMENT COMPLIANCE PATTERNS:\n"
+        for pattern in global_patterns:
+            db_info += f"        - Pattern: '{pattern['pattern']}' -> {pattern['compliance_status'].upper()} (Rule: {pattern['notes']})\n"
     
     prompt_text = prompt(name, ticker, summary, db_info, source_text)
     

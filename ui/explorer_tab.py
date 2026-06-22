@@ -268,9 +268,9 @@ def render():
                                 # Deduce interest income if reported as 0.0 but company has cash assets
                                 final_int_inc_ratio = ai_res.get('interest_income_millions', 0.0) / total_rev_m
                                 cash_and_securities_m = ai_res.get('total_cash_and_securities_millions', 0.0) or 0.0
-                                if final_int_inc_ratio == 0.0 and cash_and_securities_m > 0.0:
-                                    annual_rev_m = (stock_data.get('total_revenue', 0.0) or 1.0) / 1e6
-                                    final_int_inc_ratio = (cash_and_securities_m * 0.03) / annual_rev_m
+                                if final_int_inc_ratio == 0.0 and stock_data['total_revenue'] and stock_data['total_revenue'] > 0.0:
+
+                                    final_int_inc_ratio = (stock_data['interest_income'] or 0.0) / stock_data['total_revenue']
                                 
                                 final_debt_ratio = (ai_res.get('interest_bearing_debt_millions', 0.0) * 1e6) / mc_denom_save
                                 # Use the total liquid assets (cash + securities) for the cash screen ratio
@@ -375,9 +375,9 @@ def render():
                                 
                                 final_int_inc_ratio = interest_income_millions / total_rev_m
                                 cash_and_securities_m = ai_res.get('total_cash_and_securities_millions', 0.0) or 0.0
-                                if final_int_inc_ratio == 0.0 and cash_and_securities_m > 0.0:
-                                    annual_rev_m = (stock_data.get('total_revenue', 0.0) or 1.0) / 1e6
-                                    final_int_inc_ratio = (cash_and_securities_m * 0.03) / annual_rev_m
+                                if final_int_inc_ratio == 0.0 and stock_data['total_revenue'] and stock_data['total_revenue'] > 0.0:
+
+                                    final_int_inc_ratio = (stock_data['interest_income'] or 0.0) / stock_data['total_revenue']
                                 
                                 final_debt_ratio = (ai_res.get('interest_bearing_debt_millions', 0.0) * 1e6) / mc_denom_save
                                 final_cash_ratio = (cash_and_securities_m * 1e6) / mc_denom_save
@@ -449,9 +449,8 @@ def render():
                             
                             final_int_inc_ratio = interest_income_millions / total_rev_m
                             cash_and_securities_m = ai_res.get('total_cash_and_securities_millions', 0.0) or 0.0
-                            if final_int_inc_ratio == 0.0 and cash_and_securities_m > 0.0:
-                                annual_rev_m = (stock_data.get('total_revenue', 0.0) or 1.0) / 1e6
-                                final_int_inc_ratio = (cash_and_securities_m * 0.03) / annual_rev_m
+                            if final_int_inc_ratio == 0.0 and stock_data['total_revenue'] and stock_data['total_revenue'] > 0.0:
+                                final_int_inc_ratio = (stock_data['interest_income'] or 0.0) / stock_data['total_revenue']
                             
                             final_debt_ratio = (ai_res.get('interest_bearing_debt_millions', 0.0) * 1e6) / mc_denom_save
                             # Use the total liquid assets (cash + securities) for the cash screen ratio
@@ -556,9 +555,8 @@ def render():
                                             
                                             final_int_inc_ratio = interest_income_millions / total_rev_m
                                             cash_and_securities_m = ai_res.get('total_cash_and_securities_millions', 0.0) or 0.0
-                                            if final_int_inc_ratio == 0.0 and cash_and_securities_m > 0.0:
-                                                annual_rev_m = (stock_data.get('total_revenue', 0.0) or 1.0) / 1e6
-                                                final_int_inc_ratio = (cash_and_securities_m * 0.03) / annual_rev_m
+                                            if final_int_inc_ratio == 0.0 and stock_data['total_revenue'] and stock_data['total_revenue'] > 0.0:
+                                                final_int_inc_ratio = (stock_data['interest_income'] or 0.0) / stock_data['total_revenue']
                                             
                                             final_debt_ratio = (ai_res.get('interest_bearing_debt_millions', 0.0) * 1e6) / mc_denom_save
                                             # Use the total liquid assets (cash + securities) for the cash screen ratio

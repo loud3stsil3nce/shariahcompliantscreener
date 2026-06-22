@@ -45,6 +45,20 @@ def create_stock_db(path: Path):
         )
         """
     )
+    conn.execute(
+        """
+        CREATE TABLE curated_benchmarks (
+            ticker TEXT PRIMARY KEY,
+            haram_revenue_override REAL,
+            doubtful_revenue_override REAL,
+            interest_income_override REAL,
+            cash_ratio_override REAL,
+            debt_ratio_override REAL,
+            tangibility_ratio_override REAL,
+            updated_at TEXT
+        )
+        """
+    )
     conn.executemany(
         """
         INSERT INTO stocks (

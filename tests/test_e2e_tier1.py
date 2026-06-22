@@ -555,15 +555,15 @@ def test_ai_auditor_extracts_interest_from_notes(setup_db):
     assert "interest income" in MockGenerativeModel.last_prompt.lower()
 
 def test_ai_auditor_fallback_proxy(setup_db):
-    """17. Verifies fallback to 3.0% yield proxy when interest is not disclosed."""
+    """17. Verifies fallback to yield proxy instructions when interest is not disclosed."""
     res = analyze_company_compliance("PROXY_CO", "Proxy Co", "Summary")
     assert res is not None
     assert res["interest_income_millions"] == 150.0  # $10,000M cash * 3% * 6/12 filing period
     
     # Verify prompt contains fallback proxy instructions
     assert MockGenerativeModel.last_prompt is not None
-    assert "3.0%" in MockGenerativeModel.last_prompt
-    assert "proxy" in MockGenerativeModel.last_prompt.lower()
+    assert "benchmark" in MockGenerativeModel.last_prompt.lower()
+    assert "yield" in MockGenerativeModel.last_prompt.lower()
 
 def test_ai_auditor_prefer_extracted_to_proxy(setup_db):
     """18. Verifies AI auditor uses extracted interest instead of proxy if both are present/possible."""

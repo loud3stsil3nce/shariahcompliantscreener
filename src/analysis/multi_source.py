@@ -79,7 +79,52 @@ def analyze_multi_source_compliance(ticker, name, harvested, summary=None):
     if not compiled_text:
         return {"error": "Multi-source compiled text is empty or missing."}
         
-    prompt_text = prompt_multi_source(name, ticker, summary, compiled_text)
+    conn = None
+    db_rules = []
+    global_patterns = []
+    db_financials = None
+    try:
+        from src.db.helpers import get_db
+        conn = get_db()
+        stock = conn.execute("SELECT total_revenue, total_debt, cash_equivalents, interest_income FROM stocks WHERE ticker = ?", (ticker,)).fetchone()
+        if stock:
+            db_financials = {
+                'total_revenue': stock['total_revenue'] or 0.0,
+                'total_debt': stock['total_debt'] or 0.0,
+                'cash_equivalents': stock['cash_equivalents'] or 0.0,
+                'interest_income': stock['interest_income'] or 0.0
+            }
+        rules_cursor = conn.execute("SELECT segment_name, compliance_status, notes FROM shariah_segment_map WHERE ticker = ?", (ticker,))
+        db_rules = rules_cursor.fetchall()
+        patterns_cursor = conn.execute("SELECT pattern, compliance_status, notes FROM global_segment_patterns")
+        global_patterns = patterns_cursor.fetchall()
+    except Exception as e:
+        print(f"Error querying database rules in multi_source: {e}")
+    finally:
+        if conn:
+            conn.close()
+
+    db_info = ""
+    if db_financials:
+        db_info += f"""
+        BASELINE FINANCIAL DATA FROM DATABASE (for reference/fallback):
+        - Total Revenue: ${db_financials.get('total_revenue', 0.0) / 1e6:,.2f} million
+        - Total Debt: ${db_financials.get('total_debt', 0.0) / 1e6:,.2f} million
+        - Cash and Equivalents: ${db_financials.get('cash_equivalents', 0.0) / 1e6:,.2f} million
+        - Interest Income: ${db_financials.get('interest_income', 0.0) / 1e6:,.2f} million
+        """
+    
+    if db_rules:
+        db_info += f"\n        KNOWN COMPANY-SPECIFIC RULES FROM DATABASE FOR {ticker}:\n"
+        for rule in db_rules:
+            db_info += f"        - Segment: '{rule['segment_name']}' is classified as {rule['compliance_status'].upper()}. Rules/Notes: {rule['notes']}\n"
+            
+    if global_patterns:
+        db_info += "\n        GLOBAL SEGMENT COMPLIANCE PATTERNS:\n"
+        for pattern in global_patterns:
+            db_info += f"        - Pattern: '{pattern['pattern']}' -> {pattern['compliance_status'].upper()} (Rule: {pattern['notes']})\n"
+
+    prompt_text = prompt_multi_source(name, ticker, summary, compiled_text, db_info=db_info)
     
     # Try Gemini first
     result = call_gemini(prompt_text, SYSTEM_PROMPT_MULTI_SOURCE, client=_client, schema=MULTI_SOURCE_RESPONSE_SCHEMA)
