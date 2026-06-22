@@ -94,8 +94,8 @@ This service is designed to run as part of the Aegis Platform monorepo. Start th
     docker-compose up --build shariah-screener shariah-screener-ui
     ```
 2.  **Access points**:
-    *   **Frontend Dashboard**: [http://localhost:3000](http://localhost:3000)
-    *   **FastAPI Swagger Docs**: [http://localhost:8001/docs](http://localhost:8001/docs)
+    *   **Frontend Dashboard**
+    *   **FastAPI Swagger Docs**
 
 ---
 
@@ -111,7 +111,7 @@ This service is designed to run as part of the Aegis Platform monorepo. Start th
     ```
 2.  Configure `.env` in the current directory:
     ```env
-    DATABASE_URL=postgresql+asyncpg://Rafiur:Rafiur123@localhost:5433/db_screener
+    DATABASE_URL=postgresql+asyncpg://
     GEMINI_API_KEY=your_gemini_key_here
     OPENAI_API_KEY=your_openai_key_here
     ```
