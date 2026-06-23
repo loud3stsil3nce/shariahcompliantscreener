@@ -1,3 +1,4 @@
+import logging
 import numpy as np
 import pandas as pd
 import yfinance as yf
@@ -6,6 +7,8 @@ from scipy.optimize import minimize
 from sklearn.covariance import LedoitWolf
 
 from src.db.helpers import get_db
+
+logger = logging.getLogger(__name__)
 
 
 def get_data(include_doubtful=False):
@@ -45,6 +48,33 @@ def get_portfolio_stats(weights, log_returns, cov_matrix):
     return port_return, port_vol
 
 
+def calculate_var(weights, log_returns, confidence=0.95, horizon_days=1):
+    """
+    Calculate Value-at-Risk using historical simulation.
+
+    Computes portfolio daily P&L from historical log returns and the given
+    weight vector, sorts them ascending, and returns the (1 - confidence)-th
+    percentile as a positive loss value.  For multi-day horizons the daily
+    VaR is scaled by sqrt(horizon_days) (square-root-of-time rule).
+
+    Args:
+        weights: Array of portfolio weights summing to 1.
+        log_returns: DataFrame of daily log returns (rows = days, cols = assets).
+        confidence: Confidence level for VaR (default 0.95 → 95 %).
+        horizon_days: Holding-period horizon in trading days (default 1).
+
+    Returns:
+        Positive float representing the estimated maximum loss at the given
+        confidence level over the specified horizon (as a fraction of
+        portfolio value, e.g. 0.02 = 2 %).
+    """
+    # Portfolio daily P&L series (each day's weighted sum of log returns)
+    portfolio_returns = log_returns.values @ np.asarray(weights)
+    # (1 - confidence)-th percentile gives the loss threshold
+    var_daily = -np.percentile(portfolio_returns, (1 - confidence) * 100)
+    return float(var_daily * np.sqrt(horizon_days))
+
+
 def objective(weights, log_returns, cov_matrix, strategy="Max Sharpe"):
     port_return, port_vol = get_portfolio_stats(weights, log_returns, cov_matrix)
     if strategy == "Min Volatility" or strategy == "Target Return":
@@ -55,7 +85,31 @@ def objective(weights, log_returns, cov_matrix, strategy="Max Sharpe"):
     return -port_return / port_vol
 
 
-def run_optimizer(max_weight=0.10, sector_cap=0.30, strategy="Max Sharpe", target_vol=0.15, target_ret=0.15, include_doubtful=False):
+def run_optimizer(
+    max_weight=0.10,
+    sector_cap=0.30,
+    strategy="Max Sharpe",
+    target_vol=0.15,
+    target_ret=0.15,
+    include_doubtful=False,
+    max_var=0.02,
+):
+    """
+    Run portfolio optimization with risk guardrails.
+
+    Args:
+        max_weight: Hard per-asset concentration cap (default 10 %).
+        sector_cap: Maximum aggregate weight for any single sector (default 30 %).
+        strategy: One of "Max Sharpe", "Min Volatility", "Target Volatility",
+                  "Target Return".
+        target_vol: Target annualised volatility (used when strategy="Target Volatility").
+        target_ret: Target annualised return (used when strategy="Target Return").
+        include_doubtful: Whether to include the doubtful universe in the
+                          investable set.
+        max_var: Maximum allowable daily VaR at 95 % confidence (default 0.02 = 2 %).
+                 Enforced as a scipy inequality constraint so the optimiser
+                 cannot exceed this threshold.
+    """
     if not isinstance(include_doubtful, bool):
         raise TypeError("include_doubtful must be a boolean")
     prices, sector_map, purification_map = get_data(include_doubtful=include_doubtful)
@@ -84,11 +138,18 @@ def run_optimizer(max_weight=0.10, sector_cap=0.30, strategy="Max Sharpe", targe
         mc_results[1, i] = vol
         mc_results[2, i] = ret / vol
 
-    # Phase 5: Individual Bounds (0 to max_weight)
+    # Individual Bounds (0 to max_weight)
     bounds = tuple((0, max_weight) for _ in range(num_assets))
 
     # Basic constraint: weights sum to 1
     constraints = [{"type": "eq", "fun": lambda x: np.sum(x) - 1}]
+
+    # ----- Phase 4.2: VaR constraint -----
+    # max_var - calculate_var(x, log_returns) >= 0
+    if max_var is not None:
+        def var_constraint(x, lr=log_returns, mv=max_var):
+            return mv - calculate_var(x, lr)
+        constraints.append({"type": "ineq", "fun": var_constraint})
 
     # Target constraints based on chosen strategy
     if strategy == "Target Volatility":
@@ -104,7 +165,7 @@ def run_optimizer(max_weight=0.10, sector_cap=0.30, strategy="Max Sharpe", targe
             return ret - target
         constraints.append({"type": "ineq", "fun": ret_constraint})
 
-    # Phase 6: Sector Constraints
+    # Sector Constraints
     unique_sectors = set(sector_map.values())
     for sector in unique_sectors:
         if not sector: continue
@@ -131,7 +192,25 @@ def run_optimizer(max_weight=0.10, sector_cap=0.30, strategy="Max Sharpe", targe
         print(f"⚠️ Optimization failed: {optimal.message}")
         return None
 
-    opt_ret, opt_vol = get_portfolio_stats(optimal.x, log_returns, cov_matrix)
+    # ----- Phase 4.2: Post-optimization concentration cap clipping -----
+    final_weights = np.array(optimal.x, dtype=float)
+    clipped_tickers = []
+    for i in range(len(final_weights)):
+        if final_weights[i] > max_weight:
+            clipped_tickers.append((str(tickers[i]), float(final_weights[i])))
+            final_weights[i] = max_weight
+    if clipped_tickers:
+        # Re-normalise so weights still sum to 1
+        final_weights = final_weights / final_weights.sum()
+        for tkr, orig_w in clipped_tickers:
+            logger.warning(
+                "Concentration cap clipping: %s weight %.4f exceeded max_weight %.4f — clipped and re-normalised.",
+                tkr, orig_w, max_weight,
+            )
+        print(f"⚠️ Concentration cap: clipped {len(clipped_tickers)} asset(s) exceeding {max_weight:.0%} and re-normalised.")
+
+    opt_ret, opt_vol = get_portfolio_stats(final_weights, log_returns, cov_matrix)
+    var_95 = calculate_var(final_weights, log_returns, confidence=0.95, horizon_days=1)
 
     plt.figure(figsize=(10, 6))
     plt.scatter(mc_results[1, :], mc_results[0, :], c=mc_results[2, :], cmap="viridis", s=10, alpha=0.3)
@@ -144,11 +223,12 @@ def run_optimizer(max_weight=0.10, sector_cap=0.30, strategy="Max Sharpe", targe
     plt.grid(True)
     plt.savefig("efficient_frontier.png")
 
-    allocation = pd.Series(optimal.x, index=tickers)
+    allocation = pd.Series(final_weights, index=tickers)
     allocation = allocation[allocation > 0.001].sort_values(ascending=False)
 
     print("\n✅ Visualization saved as 'efficient_frontier.png'")
     print(f"🚀 Optimal portfolio expected return: {opt_ret:.2%}, volatility: {opt_vol:.2%}")
+    print(f"📊 VaR (95%, 1-day): {var_95:.4f} ({var_95:.2%})")
     
     # Calculate Purification
     total_purification_per_1000 = 0
@@ -165,9 +245,14 @@ def run_optimizer(max_weight=0.10, sector_cap=0.30, strategy="Max Sharpe", targe
         s = sector_map.get(t, "Unknown")
         sector_sums[s] = sector_sums.get(s, 0) + w
 
+    # Compute max concentration for risk profile reporting
+    max_concentration = float(allocation.max()) if not allocation.empty else 0.0
+
     results = {
         "expected_return": opt_ret,
         "volatility": opt_vol,
+        "VaR_95": var_95,
+        "max_concentration": max_concentration,
         "purification_per_1000": total_purification_per_1000,
         "allocation": allocation,
         "sector_exposure": pd.Series(sector_sums),

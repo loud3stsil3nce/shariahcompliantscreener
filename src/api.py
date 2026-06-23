@@ -15,7 +15,7 @@ from sqlalchemy.orm import sessionmaker
 from mcp.server.fastmcp import FastMCP                                                                                                                                                                                                                                                          
 from mcp.server.sse import SseServerTransport                                                                                                                                                                                                                                                   
  
-from src.db.helpers import ASYNC_DB_URL, get_async_db, get_db
+from src.db.helpers import ASYNC_DB_URL, get_db
 from src.db.models import (
     Base,
     HalalUniverse,
@@ -172,6 +172,35 @@ async def add_to_watchlist(ticker: str) -> str:
             new_entry = Watchlist(ticker=ticker_upper)
             session.add(new_entry)
         return f"Successfully added {ticker_upper} to the watchlist."
+
+@mcp.tool()
+async def get_portfolio_risk_profile() -> str:
+    """
+    Returns a JSON risk profile of the current optimal portfolio including
+    expected_return, volatility, VaR_95, max_concentration, and sector_exposure.
+    Call this during diagnostic sweeps to assess live portfolio risk.
+    """
+    import asyncio
+    try:
+        results = await asyncio.to_thread(
+            run_optimizer,
+            max_weight=0.10,
+            sector_cap=0.30,
+            strategy="Max Sharpe",
+            max_var=0.02,
+        )
+        if not results:
+            return json.dumps({"error": "Optimization could not be satisfied."})
+        profile = {
+            "expected_return": float(results["expected_return"]),
+            "volatility": float(results["volatility"]),
+            "VaR_95": float(results["VaR_95"]),
+            "max_concentration": float(results["max_concentration"]),
+            "sector_exposure": {k: float(v) for k, v in results["sector_exposure"].items()},
+        }
+        return json.dumps(profile, indent=2)
+    except Exception as e:
+        return json.dumps({"error": str(e)})
    
     
 app.add_middleware(
@@ -217,6 +246,7 @@ class PortfolioOptimizationInput(BaseModel):
     strategy: str = "Max Sharpe"
     target_vol: float = 0.15
     target_ret: float = 0.15
+    max_var: float = 0.02
 
 class TradeProposalInput(BaseModel):
     symbol: str
@@ -318,12 +348,41 @@ async def optimize_portfolio(data: PortfolioOptimizationInput):
                 sector_cap=data.sector_cap,
                 strategy=data.strategy,
                 target_vol=data.target_vol,
-                target_ret=data.target_ret
+                target_ret=data.target_ret,
+                max_var=data.max_var,
             )
         )
         if not results:
             raise HTTPException(status_code=400, detail="Optimization constraints could not be satisfied.")
         return results
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/portfolio/risk-profile")
+async def get_risk_profile():
+    """Returns the portfolio risk profile: expected return, volatility, VaR, concentration, sector exposure."""
+    loop = asyncio.get_running_loop()
+    try:
+        results = await loop.run_in_executor(
+            None,
+            lambda: run_optimizer(
+                max_weight=0.10,
+                sector_cap=0.30,
+                strategy="Max Sharpe",
+                max_var=0.02,
+            )
+        )
+        if not results:
+            raise HTTPException(status_code=400, detail="Optimization could not produce a valid portfolio.")
+        return {
+            "expected_return": float(results["expected_return"]),
+            "volatility": float(results["volatility"]),
+            "VaR_95": float(results["VaR_95"]),
+            "max_concentration": float(results["max_concentration"]),
+            "sector_exposure": {k: float(v) for k, v in results["sector_exposure"].items()},
+        }
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
