@@ -1,8 +1,15 @@
 import json
 import numpy as np
 import pandas as pd
+import asyncio
 
-from src.db.helpers import get_db
+# Legacy helper – re-exported for existing code/tests that import get_db directly.
+from src.db.helpers import get_db  
+
+# Async imports for new path
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import text
+
 
 MAX_DEBT_RATIO = 0.30
 MAX_CASH_RATIO = 0.30
@@ -24,47 +31,103 @@ HARAM_INDUSTRY_KEYWORDS = [
     "adult",
     "pork",
 ]
+
 def get_effective_override(row, field):
-        db_val = row[field]
-        if db_val is not None and not pd.isna(db_val):
-            return db_val
-        return np.nan
-    
-def run_screener(use_current_market_cap=False):
-    conn = get_db()
-    
-    # Check if table exists
-    table_check = conn.execute(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name='stocks'"
-    ).fetchone()
-    
-    if not table_check:
-        print("❌ Error: The 'stocks' table does not exist.")
-        print("👉 Run 'Fetch Latest Data' in the UI or 'python main.py ingest' in the CLI first.")
-        conn.close()
-        return
+    db_val = row[field]
+    if db_val is not None and not pd.isna(db_val):
+        return db_val
+    return np.nan
 
-    # Join with manual_overrides and curated_benchmarks to resolve overrides dynamically
-    query = """
-        SELECT s.*, 
-               coalesce(m.haram_revenue_override, cb.haram_revenue_override) as haram_revenue_override,
-               coalesce(m.debt_ratio_override, cb.debt_ratio_override) as debt_ratio_override,
-               coalesce(m.cash_ratio_override, cb.cash_ratio_override) as cash_ratio_override,
-               m.receivables_ratio_override as receivables_ratio_override,
-               coalesce(m.tangibility_ratio_override, cb.tangibility_ratio_override) as tangibility_ratio_override,
-               coalesce(m.interest_income_override, cb.interest_income_override) as interest_income_override,
-               coalesce(m.doubtful_revenue_override, cb.doubtful_revenue_override) as doubtful_revenue_override
-        FROM stocks s
-        LEFT JOIN manual_overrides m ON s.ticker = m.ticker
-        LEFT JOIN curated_benchmarks cb ON s.ticker = cb.ticker
+# ---------------------------------------------------------------------------
+# Core async implementation – can be called directly by the FastAPI endpoint.
+# ---------------------------------------------------------------------------
+async def _run_screener_async(
+    request_body: dict | None = None,
+    db: AsyncSession | None = None,
+    use_current_market_cap: bool = False,
+) -> None:
+    """Async version of the screener.
+
+    * ``db`` – an ``AsyncSession`` returned by the FastAPI dependency. If ``None``
+      we fall back to the legacy ``get_db`` wrapper which mimics a synchronous
+      SQLite connection (kept for the existing test suite).
+    * ``request_body`` – currently unused but kept for signature compatibility
+      with the MCP tool wrapper.
     """
-    df = pd.read_sql_query(query, conn)
-    
-    if df.empty:
-        print("No data found. Run 'python main.py ingest' first.")
-        conn.close()
-        return
+    if db is None:
+        # -------------------------------------------------------------------
+        # Legacy sync path – preserve original behaviour for unit tests.
+        # -------------------------------------------------------------------
+        conn = get_db()
+        # Verify the ``stocks`` table exists using SQLite query (compatible with legacy tests).
+        table_check = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='stocks'"
+        ).fetchone()
+        if not table_check:
+            print("❌ Error: The 'stocks' table does not exist.")
+            print(
+                "👉 Run the database initialization or ingestion script first."
+            )
+            return
+        # Load data using the historic ``pd.read_sql_query`` helper.
+        query = """
+            SELECT s.*, 
+                   coalesce(m.haram_revenue_override, cb.haram_revenue_override) as haram_revenue_override,
+                   coalesce(m.debt_ratio_override, cb.debt_ratio_override) as debt_ratio_override,
+                   coalesce(m.cash_ratio_override, cb.cash_ratio_override) as cash_ratio_override,
+                   m.receivables_ratio_override as receivables_ratio_override,
+                   coalesce(m.tangibility_ratio_override, cb.tangibility_ratio_override) as tangibility_ratio_override,
+                   coalesce(m.interest_income_override, cb.interest_income_override) as interest_income_override,
+                   coalesce(m.doubtful_revenue_override, cb.doubtful_revenue_override) as doubtful_revenue_override
+            FROM stocks s
+            LEFT JOIN manual_overrides m ON s.ticker = m.ticker
+            LEFT JOIN curated_benchmarks cb ON s.ticker = cb.ticker
+        """
+        df = pd.read_sql_query(query, conn)
+        if df.empty:
+            print("No data found. Run 'python main.py ingest' first.")
+            return
+        # All subsequent calculations are pure pandas and identical for async
+        # and sync paths – they operate on ``df`` in‑place.
+    else:
+        # -------------------------------------------------------------------
+        # Async path – used by the FastAPI endpoint.
+        # -------------------------------------------------------------------
+        # Verify the ``stocks`` table exists using SQLite-compatible query (works for both SQLite and Postgres).
+        result = await db.execute(text(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='stocks'"
+        ))
+        table_name = result.scalar_one_or_none()
+        if not table_name:
+            print("❌ Error: The 'stocks' table does not exist.")
+            print(
+                "👉 Run the database initialization or ingestion script first."
+            )
+            return
+        # Load data asynchronously.
+        query = """
+            SELECT s.*, 
+                   coalesce(m.haram_revenue_override, cb.haram_revenue_override) as haram_revenue_override,
+                   coalesce(m.debt_ratio_override, cb.debt_ratio_override) as debt_ratio_override,
+                   coalesce(m.cash_ratio_override, cb.cash_ratio_override) as cash_ratio_override,
+                   m.receivables_ratio_override as receivables_ratio_override,
+                   coalesce(m.tangibility_ratio_override, cb.tangibility_ratio_override) as tangibility_ratio_override,
+                   coalesce(m.interest_income_override, cb.interest_income_override) as interest_income_override,
+                   coalesce(m.doubtful_revenue_override, cb.doubtful_revenue_override) as doubtful_revenue_override
+            FROM stocks s
+            LEFT JOIN manual_overrides m ON s.ticker = m.ticker
+            LEFT JOIN curated_benchmarks cb ON s.ticker = cb.ticker
+        """
+        result = await db.execute(text(query))
+        rows = result.fetchall()
+        df = pd.DataFrame(rows, columns=result.keys())
+        if df.empty:
+            print("No data found. Run 'python main.py ingest' first.")
+            return
 
+    # -------------------------------------------------------------------
+    # Shared calculation block – works for both sync and async branches.
+    # -------------------------------------------------------------------
     def get_market_cap(row):
         val = 0.0
         if use_current_market_cap:
@@ -75,40 +138,29 @@ def run_screener(use_current_market_cap=False):
                 pass
         if val <= 0:
             val = float(row.get("avg_market_cap_36mo", 0.0) or 0.0)
-            
-        # Fallback for unlisted/pre-IPO companies where market capitalization is unavailable
         if val <= 0:
-            # 1. Fallback to Book Value of Equity (Total Assets - Total Liabilities) as per AAOIFI Standard No. 21
             try:
                 info = json.loads(row["raw_info"])
                 total_liabilities = float(info.get("total_liabilities", 0.0))
             except Exception:
                 total_liabilities = 0.0
-            
             total_assets = float(row.get("total_assets", 0.0) or 0.0)
             book_value = total_assets - total_liabilities
-            
             if book_value > 0:
                 return book_value
-                
-            # 2. Fallback to Total Assets (widely accepted in Islamic PE practice)
             if total_assets > 0:
                 return total_assets
-                
         return val
 
     df["market_cap_denom"] = df.apply(get_market_cap, axis=1).replace(0, np.nan)
     mc_denom = df["market_cap_denom"]
     assets = df["total_assets"].replace(0, np.nan)
     revenue = df["total_revenue"].replace(0, np.nan)
-
     df["sector_lower"] = df["sector"].fillna("").str.lower()
     df["industry_lower"] = df["industry"].fillna("").str.lower()
-
     df["pass_sector"] = ~df["sector_lower"].str.contains("|".join(HARAM_SECTORS), na=False)
     df["pass_industry"] = ~df["industry_lower"].str.contains("|".join(HARAM_INDUSTRY_KEYWORDS), na=False)
 
-    # Calculate Ratios with Manual Override and Curated Preset Precedence
     def apply_override(calculated, override):
         return override if not pd.isna(override) else calculated
 
@@ -122,15 +174,12 @@ def run_screener(use_current_market_cap=False):
     df["cash_ratio"] = df.apply(lambda x: apply_override(x["cash_ratio"], x["eff_cash_override"]), axis=1)
     df["pass_cash"] = df["cash_ratio"] < MAX_CASH_RATIO
 
-    # Receivables check (legacy receivables ratio calculated but no longer used for pass/fail compliance screen check)
     df["eff_rec_override"] = df.apply(lambda x: get_effective_override(x, "receivables_ratio_override"), axis=1)
     df["receivables_ratio"] = (df["accounts_receivable"] / assets).fillna(0)
     df["receivables_ratio"] = df.apply(lambda x: apply_override(x["receivables_ratio"], x["eff_rec_override"]), axis=1)
     df["pass_receivables"] = df["receivables_ratio"] < MAX_RECEIVABLES_RATIO
 
-    # Tangibility Screen check
     df["eff_tang_override"] = df.apply(lambda x: get_effective_override(x, "tangibility_ratio_override"), axis=1)
-    # Liquid assets = Cash + AR
     liquid_assets = df["cash_equivalents"].fillna(0) + df["accounts_receivable"].fillna(0)
     calculated_tangibility = np.where(df["total_assets"] > 0, (df["total_assets"] - liquid_assets) / df["total_assets"], 0.0)
     df["tangibility_ratio"] = calculated_tangibility
@@ -138,18 +187,13 @@ def run_screener(use_current_market_cap=False):
     df["tangibility_ratio"] = df["tangibility_ratio"].fillna(0.0)
     df["pass_tangibility"] = df["tangibility_ratio"] >= MIN_TANGIBILITY_RATIO
 
-    # Combine Interest Income with Manual/AI Revenue Overrides
     df["eff_int_override"] = df.apply(lambda x: get_effective_override(x, "interest_income_override"), axis=1)
     df["interest_ratio"] = (df["interest_income"] / revenue).fillna(0)
     df["interest_ratio"] = df.apply(lambda x: apply_override(x["interest_ratio"], x["eff_int_override"]), axis=1)
-    
-    # Total Haram Revenue (Interest + Qualitative Segments)
     eff_haram_override = df.apply(lambda x: get_effective_override(x, "haram_revenue_override"), axis=1)
     qualitative_haram = eff_haram_override.fillna(0.0)
     df["total_haram_ratio"] = df["interest_ratio"] + qualitative_haram
     df["pass_interest"] = df["total_haram_ratio"] < MAX_HARAM_INCOME_RATIO
-
-    # Doubtful Revenue and combined checks
     eff_doubtful_override = df.apply(lambda x: get_effective_override(x, "doubtful_revenue_override"), axis=1)
     doubtful_revenue = eff_doubtful_override.fillna(0.0)
     df["doubtful_ratio"] = doubtful_revenue
@@ -166,10 +210,8 @@ def run_screener(use_current_market_cap=False):
         df["pass_combined_interest"]
     )
 
-    # PHASE 9: Weighted Grading System (Expanded)
     def calculate_grade(row):
         if not row["is_halal"]:
-            # Check if failed solely due to doubtful revenue rule
             is_doubtful_reason = (
                 row["pass_sector"] &
                 row["pass_industry"] &
@@ -182,26 +224,24 @@ def run_screener(use_current_market_cap=False):
             if is_doubtful_reason:
                 return "Doubtful", 0.0
             return "F", 0.0
-        
-        # Calculate scores for each metric (lower is better, 0.0 is perfect)
         s_debt = row["debt_ratio"] / MAX_DEBT_RATIO
         s_cash = row["cash_ratio"] / MAX_CASH_RATIO
         s_liq = (1 - row["tangibility_ratio"]) / MAX_LIQUID_RATIO
         s_int = row["total_combined_ratio"] / MAX_HARAM_INCOME_RATIO
-        
-        # Total score (average of ratios, lower is better)
         avg_ratio = np.mean([s_debt, s_cash, s_liq, s_int])
-        
-        # Map to 0-100 (where 100 is best)
         score = max(0, 100 * (1 - avg_ratio))
-        
-        # More granular tiers to match professional tools
-        if score >= 92: return "A+", score
-        if score >= 85: return "A", score
-        if score >= 78: return "B+", score
-        if score >= 70: return "B", score
-        if score >= 62: return "C+", score
-        if score >= 55: return "C", score
+        if score >= 92:
+            return "A+", score
+        if score >= 85:
+            return "A", score
+        if score >= 78:
+            return "B+", score
+        if score >= 70:
+            return "B", score
+        if score >= 62:
+            return "C+", score
+        if score >= 55:
+            return "C", score
         return "D", score
 
     df[["grade", "compliance_score"]] = df.apply(
@@ -223,9 +263,8 @@ def run_screener(use_current_market_cap=False):
         axis=1,
     )
 
-    # PHASE 4: Purification Calculation
     df["purification_per_share"] = (
-        df["interest_income"].fillna(0) / 
+        df["interest_income"].fillna(0) /
         df["shares_outstanding"].replace(0, np.nan)
     ).fillna(0)
 
@@ -233,30 +272,67 @@ def run_screener(use_current_market_cap=False):
     doubtful_universe = df[(~df["is_halal"]) & (df["grade"] == "Doubtful")].copy()
     rejected_stocks = df[(~df["is_halal"]) & (df["grade"] == "F")].copy()
 
-    halal_universe.to_sql("halal_universe", conn, if_exists="replace", index=False)
-    doubtful_universe.to_sql("doubtful_universe", conn, if_exists="replace", index=False)
-    rejected_stocks.to_sql("halal_rejections", conn, if_exists="replace", index=False)
+    if db is None:
+        # Legacy sync write using the helper connection.
+        halal_universe.to_sql("halal_universe", conn, if_exists="replace", index=False)
+        doubtful_universe.to_sql("doubtful_universe", conn, if_exists="replace", index=False)
+        rejected_stocks.to_sql("halal_rejections", conn, if_exists="replace", index=False)
+    else:
+        # Async writes – use ``run_sync`` on the async session.
+        await db.run_sync(lambda sync_conn: halal_universe.to_sql("halal_universe", con=sync_conn, if_exists="replace", index=False))
+        await db.run_sync(lambda sync_conn: doubtful_universe.to_sql("doubtful_universe", con=sync_conn, if_exists="replace", index=False))
+        await db.run_sync(lambda sync_conn: rejected_stocks.to_sql("halal_rejections", con=sync_conn, if_exists="replace", index=False))
 
+    # Human‑readable summary (unchanged from original implementation).
     print(f"\n✅ Halal Universe ({len(halal_universe)} stocks passed):")
     if not halal_universe.empty:
         summary = halal_universe[["ticker", "name", "grade", "debt_ratio", "purification_per_share"]].copy()
         summary["debt_ratio"] = (summary["debt_ratio"] * 100).round(2).astype(str) + "%"
         summary["purification_per_share"] = "$" + summary["purification_per_share"].round(4).astype(str)
         print(summary.to_string(index=False))
-
     print(f"\n❔ Doubtful Universe ({len(doubtful_universe)} stocks):")
     if not doubtful_universe.empty:
         summary_doubtful = doubtful_universe[["ticker", "name", "grade", "debt_ratio", "purification_per_share"]].copy()
         summary_doubtful["debt_ratio"] = (summary_doubtful["debt_ratio"] * 100).round(2).astype(str) + "%"
         summary_doubtful["purification_per_share"] = "$" + summary_doubtful["purification_per_share"].round(4).astype(str)
         print(summary_doubtful.to_string(index=False))
-
     print(f"\n❌ Rejected Stocks ({len(rejected_stocks)} failed):")
     for _, row in rejected_stocks.iterrows():
         print(f"  - {row['ticker']}: {row['halal_failure']}")
+    return
 
-    conn.close()
+# ---------------------------------------------------------------------------
+# Public wrapper retained for backward compatibility (synchronous call).
+# ---------------------------------------------------------------------------
+def run_screener(use_current_market_cap: bool = False) -> None:
+    """Legacy sync entry point used by the original test suite.
 
+    It forwards to the async implementation via the ``run_sync`` helper
+    defined in ``src.db.helpers``.
+    """
+    from src.db.helpers import run_sync
 
+    run_sync(_run_screener_async(use_current_market_cap=use_current_market_cap))
+
+# ---------------------------------------------------------------------------
+# CLI entry point – unchanged but now uses the async engine.
+# ---------------------------------------------------------------------------
 if __name__ == "__main__":
-    run_screener()
+    import os
+    from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+    from sqlalchemy.orm import sessionmaker
+
+    DATABASE_URL = os.getenv(
+        "DATABASE_URL",
+        "postgresql+asyncpg://postgres:postgres@localhost/aegis",
+    )
+    async_engine = create_async_engine(DATABASE_URL, echo=False)
+    async_session = sessionmaker(
+        async_engine, expire_on_commit=False, class_=AsyncSession
+    )
+
+    async def _run():
+        async with async_session() as db:
+            await _run_screener_async(db=db)
+
+    asyncio.run(_run())

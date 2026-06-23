@@ -15,7 +15,7 @@ from sqlalchemy.orm import sessionmaker
 from mcp.server.fastmcp import FastMCP                                                                                                                                                                                                                                                          
 from mcp.server.sse import SseServerTransport                                                                                                                                                                                                                                                   
  
-from src.db.helpers import ASYNC_DB_URL, get_db
+from src.db.helpers import ASYNC_DB_URL, get_async_db, get_db
 from src.db.models import (
     Base,
     HalalUniverse,
