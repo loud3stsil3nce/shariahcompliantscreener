@@ -32,3 +32,26 @@ RESPONSE_SCHEMA = {
         "reasoning"
     ]
 }
+
+SEC_EXTRACTION_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "company_name": {"type": "string", "description": "Full name of the company"},
+        "sector": {"type": "string", "description": "Estimated sector (e.g. Technology, Industrials, etc.)"},
+        "industry": {"type": "string", "description": "Estimated industry"},
+        "total_assets_usd": {"type": "number", "description": "Total assets in USD"},
+        "total_debt_usd": {"type": "number", "description": "Total interest-bearing debt (sum of current and non-current term loans, notes, and credit facilities) in USD from the Consolidated Balance Sheets. Do NOT include operating lease liabilities or use future principal payment schedules."},
+        "total_liabilities_usd": {"type": "number", "description": "Total liabilities in USD"},
+
+        "cash_equivalents_usd": {"type": "number", "description": "Cash and cash equivalents + marketable securities in USD"},
+        "accounts_receivable_usd": {"type": "number", "description": "Accounts receivable in USD"},
+        "total_revenue_usd": {"type": "number", "description": "Total revenue in USD"},
+        "interest_income_usd": {"type": "number", "description": "Interest income in USD, or 0.0 if unknown/not disclosed"},
+        "shares_outstanding": {"type": "number", "description": "Shares outstanding, or 0.0 if unknown"}
+    },
+    "required": [
+        "company_name", "sector", "industry", "total_assets_usd", "total_debt_usd", "total_liabilities_usd",
+        "cash_equivalents_usd", "accounts_receivable_usd", "total_revenue_usd", "interest_income_usd", "shares_outstanding"
+    ]
+}
+

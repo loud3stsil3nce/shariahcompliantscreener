@@ -219,14 +219,14 @@ PROMPT_WITHOUT_SOURCE = """
         Return the analysis as a JSON object.
         """
         
-def prompt(name, ticker, summary, db_info, source_text=None):
+def prompt(name, ticker, summary, db_info, source_text=None, max_source_chars=1500000):
     if source_text:
         return PROMPT_WITH_SOURCE.format(
             name=name,
             ticker=ticker,
             summary=summary,
             db_info=db_info,
-            source_text=source_text[:1500000]
+            source_text=source_text[:max_source_chars]
         )
     return PROMPT_WITHOUT_SOURCE.format(
         name=name,

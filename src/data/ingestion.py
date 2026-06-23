@@ -208,6 +208,77 @@ def fetch_stock_with_retry(ticker: str, retries: int = 3) -> dict | None:
     return None
 
 
+def fetch_stock_from_sec_url(ticker: str, sec_url: str) -> dict | None:
+    """Downloads an SEC S-1 or other prospectus filing, uses Gemini to extract key financials, and returns a record."""
+    from src.data.sec_extractor import SECParser
+    from src.ai.gemini_client import call_gemini
+    from src.ai.schema import SEC_EXTRACTION_SCHEMA
+
+    sec_url = sec_url.strip().strip('"').strip("'").rstrip('.')
+    logging.info(f"Ingesting pre-IPO company {ticker} from SEC URL: {sec_url}")
+
+    try:
+        parser = SECParser()
+        text = parser.get_text_from_url(sec_url)
+        if not text:
+            raise Exception("No text extracted from SEC URL.")
+
+        prompt_text = f"""
+        Analyze the following SEC S-1 or prospectus filing text and extract the company's financial figures.
+        IMPORTANT - SHARIAH SCREENING REQUIREMENTS:
+        1. Shariah screening requires financial figures representing a full 12-month (annual) period. Prioritize extracting the full fiscal year figures (e.g. the most recent complete 12-month audited fiscal year, such as the year ended December 31, 2025) rather than subsequent 3-month or quarterly interim stub periods. Only extract interim stub periods if annual figures are entirely absent from the filing.
+        2. Look at the table headers carefully to identify the scale of the figures (e.g., whether numbers are reported in thousands, millions, or full dollars). All currency figures should be reported in USD as exact floats representing the full dollar amount (e.g. if the table is in thousands, $794,287 should be converted and returned as 794287000.0).
+        3. Extract the total interest-bearing debt (e.g., term loans, convertible notes, credit facilities) directly from the carrying values listed on the Consolidated Balance Sheet. Do NOT include operating leases or use the future principal commitments schedules in the notes.
+        4. If a particular field is not mentioned or cannot be found, report 0.0.
+        
+        Text content:
+        {text}
+        """
+
+
+
+        
+        system_prompt = "You are a financial analyst extracting exact numbers from SEC filings. Output only JSON matching the schema."
+        
+        extracted = call_gemini(prompt_text, system_prompt, schema=SEC_EXTRACTION_SCHEMA)
+        
+        if not extracted or "error" in extracted:
+            raise Exception(f"Gemini extraction failed: {extracted.get('error') if extracted else 'No response'}")
+
+        # Map extracted fields to database schema
+        raw_info_dict = {
+            "longName": extracted.get("company_name", ""),
+            "shortName": extracted.get("company_name", ""),
+            "sector": extracted.get("sector", ""),
+            "industry": extracted.get("industry", ""),
+            "total_liabilities": float(extracted.get("total_liabilities_usd", 0.0)),
+            "longBusinessSummary": f"Pre-IPO company ingested from SEC URL: {sec_url}"
+        }
+
+        record = {
+            "ticker": ticker.upper(),
+            "name": extracted.get("company_name", ""),
+            "sector": extracted.get("sector", ""),
+            "industry": extracted.get("industry", ""),
+            "total_assets": float(extracted.get("total_assets_usd", 0.0)),
+            "total_debt": float(extracted.get("total_debt_usd", 0.0)),
+            "cash_equivalents": float(extracted.get("cash_equivalents_usd", 0.0)),
+            "accounts_receivable": float(extracted.get("accounts_receivable_usd", 0.0)),
+            "total_revenue": float(extracted.get("total_revenue_usd", 0.0)),
+            "interest_income": float(extracted.get("interest_income_usd", 0.0)),
+            "shares_outstanding": float(extracted.get("shares_outstanding", 0.0)),
+            "avg_market_cap_36mo": 0.0,  # Pre-IPO/unlisted, no market price history
+            "raw_info": json.dumps(raw_info_dict),
+            "sec_filing_url": sec_url,
+            "fetched_at": datetime.utcnow().isoformat(),
+        }
+        return record
+    except Exception as e:
+        logging.error(f"Error fetching stock from SEC URL: {e}")
+        raise e
+
+
+
 def process_universe(tickers: list[str], conn, batch_size: int = 50):
     """Process tickers sequentially - fast and stable."""
     total = len(tickers)

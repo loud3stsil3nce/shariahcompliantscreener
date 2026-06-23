@@ -132,8 +132,9 @@ def analyze_multi_source_compliance(ticker, name, harvested, summary=None):
         write_audit_report(ticker, name, harvested, result)
         return result
         
-    # Fall back to OpenAI
-    result = call_openai(prompt_text, SYSTEM_PROMPT_MULTI_SOURCE, schema=MULTI_SOURCE_RESPONSE_SCHEMA)
+    # Fall back to OpenAI - regenerate with smaller compiled_text to avoid OpenAI TPM limit and context window limits
+    openai_prompt_text = prompt_multi_source(name, ticker, summary, compiled_text, db_info=db_info, max_compiled_chars=300000)
+    result = call_openai(openai_prompt_text, SYSTEM_PROMPT_MULTI_SOURCE, schema=MULTI_SOURCE_RESPONSE_SCHEMA)
     if isinstance(result, dict) and "error" not in result:
         write_audit_report(ticker, name, harvested, result)
         return result

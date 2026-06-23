@@ -426,16 +426,25 @@ async def delete_stock(ticker: str):
         conn.close()
 
 @app.post("/api/stocks/{ticker}/ingest")
-async def add_custom_ticker(ticker: str):
+async def add_custom_ticker(ticker: str, sec_url: Optional[str] = None):
     ticker = ticker.upper().strip()
     loop = asyncio.get_running_loop()
     try:
-        data = await loop.run_in_executor(
-            None,
-            lambda: fetch_stock_with_retry(ticker)
-        )
-        if not data:
-            raise HTTPException(status_code=400, detail=f"Could not find ticker '{ticker}' on Yahoo Finance.")
+        if sec_url:
+            from src.data.ingestion import fetch_stock_from_sec_url
+            data = await loop.run_in_executor(
+                None,
+                lambda: fetch_stock_from_sec_url(ticker, sec_url)
+            )
+            if not data:
+                raise HTTPException(status_code=400, detail=f"Could not ingest ticker '{ticker}' from SEC URL '{sec_url}'.")
+        else:
+            data = await loop.run_in_executor(
+                None,
+                lambda: fetch_stock_with_retry(ticker)
+            )
+            if not data:
+                raise HTTPException(status_code=400, detail=f"Could not find ticker '{ticker}' on Yahoo Finance.")
         
         conn = get_db()
         try:
@@ -464,6 +473,7 @@ async def add_custom_ticker(ticker: str):
         if isinstance(e, HTTPException):
             raise e
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/api/stocks/{ticker}/quote")
 async def get_realtime_quote(ticker: str):
@@ -498,11 +508,31 @@ async def get_realtime_quote(ticker: str):
             return live_p
             
         live_price = await loop.run_in_executor(None, fetch_yf_price)
-        if not live_price:
-            raise HTTPException(status_code=500, detail=f"Could not fetch real-time price for {ticker}.")
+        if not live_price or pd.isna(live_price):
+            # Fallback for unlisted/pre-IPO: do not throw 500 error, set price to 0.0
+            live_price = 0.0
             
         shares = float(stock_data.get('shares_outstanding', 0.0) or 0.0)
         live_cap = live_price * shares if shares > 0 else 0.0
+        
+        # Determine the denominator for the financial ratios
+        denom = live_cap
+        if not denom or denom <= 0:
+            # Fallback for unlisted/pre-IPO: Book Value or Total Assets
+            try:
+                info = json.loads(stock_data['raw_info'])
+                total_liabilities = float(info.get("total_liabilities", 0.0))
+            except Exception:
+                total_liabilities = 0.0
+            
+            total_assets = float(stock_data['total_assets'] or 0.0)
+            book_value = total_assets - total_liabilities
+            if book_value > 0:
+                denom = book_value
+            elif total_assets > 0:
+                denom = total_assets
+            else:
+                denom = 1.0 # Safe fallback to avoid division by zero
         
         # Calculate dynamic ratios
         eff_debt = get_effective_override(stock_data, "debt_ratio_override")
@@ -512,8 +542,9 @@ async def get_realtime_quote(ticker: str):
         eff_haram = get_effective_override(stock_data, "haram_revenue_override")
         eff_doubtful = get_effective_override(stock_data, "doubtful_revenue_override")
         
-        debt_ratio = eff_debt if not pd.isna(eff_debt) else (stock_data['total_debt'] / live_cap if live_cap else 0.0)
-        cash_ratio = eff_cash if not pd.isna(eff_cash) else (stock_data['cash_equivalents'] / live_cap if live_cap else 0.0)
+        debt_ratio = eff_debt if not pd.isna(eff_debt) else (stock_data['total_debt'] / denom if denom else 0.0)
+        cash_ratio = eff_cash if not pd.isna(eff_cash) else (stock_data['cash_equivalents'] / denom if denom else 0.0)
+
         
         if not pd.isna(eff_tangibility):
             tang_ratio = eff_tangibility
@@ -625,20 +656,33 @@ async def run_ai_audit(ticker: str, data: AuditInput):
         source_url = ""
         harvested = None
         
+        sec_url = stock_data.get('sec_filing_url')
+        
         if data.audit_type == "source_backed":
-            from src.data.sec_extractor import get_latest_10k_text
-            def get_sec():
-                return get_latest_10k_text(ticker)
+            if sec_url:
+                def get_sec():
+                    from src.data.sec_extractor import SECParser
+                    parser = SECParser()
+                    return parser.get_text_from_url(sec_url), sec_url
+            else:
+                from src.data.sec_extractor import get_latest_10k_text
+                def get_sec():
+                    return get_latest_10k_text(ticker)
             source_text, source_url = await loop.run_in_executor(None, get_sec)
             if not source_text:
                 raise HTTPException(status_code=400, detail=f"Could not retrieve SEC filings for {ticker}.")
                 
         elif data.audit_type == "multi_source":
-            from src.data.sec_extractor import get_latest_10k_text
             from src.data.harvester import harvest_all_sources
-            
-            def get_sec():
-                return get_latest_10k_text(ticker)
+            if sec_url:
+                def get_sec():
+                    from src.data.sec_extractor import SECParser
+                    parser = SECParser()
+                    return parser.get_text_from_url(sec_url), sec_url
+            else:
+                from src.data.sec_extractor import get_latest_10k_text
+                def get_sec():
+                    return get_latest_10k_text(ticker)
             source_text, source_url = await loop.run_in_executor(None, get_sec)
             
             def run_harvester():
@@ -667,7 +711,21 @@ async def run_ai_audit(ticker: str, data: AuditInput):
             err_msg = ai_res.get("error") if isinstance(ai_res, dict) else str(ai_res)
             raise HTTPException(status_code=500, detail=f"AI model verdict failed: {err_msg}")
             
-        mc_denom_save = stock_data['avg_market_cap_36mo'] or 1.0
+        mc_denom_save = stock_data['avg_market_cap_36mo']
+        if not mc_denom_save or mc_denom_save <= 0:
+            try:
+                info = json.loads(stock_data['raw_info'])
+                total_liabilities = float(info.get("total_liabilities", 0.0))
+            except Exception:
+                total_liabilities = 0.0
+            total_assets = float(stock_data['total_assets'] or 0.0)
+            book_value = total_assets - total_liabilities
+            if book_value > 0:
+                mc_denom_save = book_value
+            elif total_assets > 0:
+                mc_denom_save = total_assets
+            else:
+                mc_denom_save = 1.0
         filing_period = ai_res.get('filing_period_months', 12) or 12
         scale_factor = 12.0 / filing_period
         
@@ -778,7 +836,21 @@ async def run_document_upload_audit(ticker: str, file: UploadFile = File(...)):
             err_msg = ai_res.get("error") if isinstance(ai_res, dict) else str(ai_res)
             raise HTTPException(status_code=500, detail=f"AI model verdict on upload failed: {err_msg}")
             
-        mc_denom_save = stock_data['avg_market_cap_36mo'] or 1.0
+        mc_denom_save = stock_data['avg_market_cap_36mo']
+        if not mc_denom_save or mc_denom_save <= 0:
+            try:
+                info = json.loads(stock_data['raw_info'])
+                total_liabilities = float(info.get("total_liabilities", 0.0))
+            except Exception:
+                total_liabilities = 0.0
+            total_assets = float(stock_data['total_assets'] or 0.0)
+            book_value = total_assets - total_liabilities
+            if book_value > 0:
+                mc_denom_save = book_value
+            elif total_assets > 0:
+                mc_denom_save = total_assets
+            else:
+                mc_denom_save = 1.0
         filing_period = ai_res.get('filing_period_months', 12) or 12
         scale_factor = 12.0 / filing_period
         

@@ -205,6 +205,18 @@ class SECParser:
         except Exception as e:
             return None, f"SEC Error: {str(e)}"
 
+    def get_text_from_url(self, url):
+        """Downloads and extracts text from a direct SEC filing URL."""
+        time.sleep(0.1)
+        response = requests.get(url, headers=self.headers)
+        if response.status_code != 200:
+            raise Exception(f"Failed to fetch SEC filing from URL. Status code: {response.status_code}")
+        soup = bs4.BeautifulSoup(response.text, 'html.parser')
+        clean_text = self.html_to_clean_text_with_tables(soup)
+        filtered_text = self.extract_relevant_sections(clean_text, max_chars=600000)
+        return filtered_text
+
+
 # Module-level convenience wrapper for backward compatibility
 def get_latest_10k_text(ticker):
     parser = SECParser()

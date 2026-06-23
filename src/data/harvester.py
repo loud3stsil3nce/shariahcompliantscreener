@@ -244,10 +244,29 @@ def semantic_search(query, chunks, chunk_embeddings, top_k=5):
 
 # --- SEC EDGAR, TRANSCRIPTS & SEARCH FETCHERS ---
 
+def get_company_name_and_sec_url(ticker):
+    company_name = ticker
+    sec_filing_url = None
+    try:
+        from src.db.helpers import get_db
+        conn = get_db()
+        row = conn.execute("SELECT name, sec_filing_url FROM stocks WHERE ticker = ?", (ticker,)).fetchone()
+        if row:
+            if row["name"]:
+                company_name = row["name"]
+            if row["sec_filing_url"]:
+                sec_filing_url = row["sec_filing_url"]
+        conn.close()
+    except Exception:
+        pass
+    return company_name, sec_filing_url
+
 # --- tries FMP, Alpha Vantage, then Google-scrape fallbacks for earnings transcripts ---
 async def fetch_transcript(ticker, year=2025, quarter=4):
     """Fetch earnings call transcript from APIs or fallback to web scraping."""
     ticker = ticker.upper().strip()
+    company_name, sec_filing_url = get_company_name_and_sec_url(ticker)
+    search_term = company_name if sec_filing_url else ticker
     
     # 1. Try Financial Modeling Prep (FMP) if API Key exists
     fmp_key = os.getenv("FMP_API_KEY")
@@ -287,7 +306,7 @@ async def fetch_transcript(ticker, year=2025, quarter=4):
 
     # 3. Fallback: Search Google/SerpAPI for the transcript text
     print(f"⚠️ [Harvester] [Transcript] Direct APIs unavailable or returned empty. Falling back to search...")
-    search_query = f"{ticker} Q{quarter} {year} earnings call transcript Motley Fool"
+    search_query = f"{search_term} Q{quarter} {year} earnings call transcript Motley Fool"
     urls = []
     serp_key = os.getenv("SERPAPI_API_KEY")
     if serp_key:
@@ -344,7 +363,9 @@ async def fetch_transcript(ticker, year=2025, quarter=4):
 async def search_ir_presentation_pdf(ticker, year=2025, quarter=4):
     """Find the URL of the company's investor presentation PDF using search queries."""
     ticker = ticker.upper().strip()
-    query = f"{ticker} investor relations Q{quarter} {year} earnings presentation filetype:pdf"
+    company_name, sec_filing_url = get_company_name_and_sec_url(ticker)
+    search_term = company_name if sec_filing_url else ticker
+    query = f"{search_term} investor relations Q{quarter} {year} earnings presentation filetype:pdf"
     
     # Try SerpAPI if key exists
     serp_key = os.getenv("SERPAPI_API_KEY")
@@ -518,21 +539,13 @@ async def harvest_all_sources(ticker, year=2025, quarter=4, sec_text=None):
     pdf_url_task = search_ir_presentation_pdf(ticker, year, quarter)
     
     # Target web search for segment and Shariah breakdown details
-    company_name = ticker
-    try:
-        from src.db.helpers import get_db
-        conn = get_db()
-        row = conn.execute("SELECT name FROM stocks WHERE ticker = ?", (ticker,)).fetchone()
-        if row and row["name"]:
-            company_name = row["name"]
-        conn.close()
-    except Exception:
-        pass
+    company_name, sec_filing_url = get_company_name_and_sec_url(ticker)
+    search_term = company_name if sec_filing_url else ticker
 
     queries = [
-        f"{ticker} segment revenue split breakdown {year}",
-        f"{ticker} subsegment subscriber count OR pricing OR ARPU OR revenue split Music TV Card {year}",
-        f"{ticker} Shariah compliance Musaffa revenue split",
+        f"{search_term} segment revenue split breakdown {year}",
+        f"{search_term} subsegment subscriber count OR pricing OR ARPU OR revenue split Music TV Card {year}",
+        f"{search_term} Shariah compliance Musaffa revenue split",
         f"{company_name} subscription services subscriber counts pricing ARPU {year}"
     ]
     web_search_tasks = [search_web_evidence(q) for q in queries]

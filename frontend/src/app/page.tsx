@@ -124,6 +124,8 @@ export default function Dashboard() {
   // Custom Ticker Ingestion
   const [customTicker, setCustomTicker] = useState<string>('');
   const [addingCustomTicker, setAddingCustomTicker] = useState<boolean>(false);
+  const [customSecUrl, setCustomSecUrl] = useState<string>('');
+
 
   // AI Auditor States
   const [aiAuditing, setAiAuditing] = useState<boolean>(false);
@@ -376,11 +378,16 @@ export default function Dashboard() {
     if (!customTicker) return;
     setAddingCustomTicker(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/stocks/${customTicker}/ingest`, { method: 'POST' });
+      let url = `${API_BASE_URL}/stocks/${customTicker}/ingest`;
+      if (customSecUrl.trim()) {
+        url += `?sec_url=${encodeURIComponent(customSecUrl.trim())}`;
+      }
+      const res = await fetch(url, { method: 'POST' });
       const data = await res.json();
       if (res.ok) {
         alert(data.message);
         setCustomTicker('');
+        setCustomSecUrl('');
         fetchAllTickers();
       } else {
         alert(data.detail || 'Failed to ingest custom ticker');
@@ -391,6 +398,7 @@ export default function Dashboard() {
       setAddingCustomTicker(false);
     }
   };
+
 
   // Delete Ticker
   const handleDeleteStock = async (ticker: string) => {
@@ -1013,24 +1021,32 @@ export default function Dashboard() {
 
               {/* Add custom ticker expander */}
               <div className="border border-[#1e293b] p-4 rounded-lg bg-[#090d16]/40 space-y-3">
-                <span className="text-[10px] uppercase font-bold text-[#94a3b8] block">➕ Ingest Custom Ticker</span>
-                <div className="flex gap-2">
+                <span className="text-[10px] uppercase font-bold text-[#94a3b8] block">➕ Ingest Custom Ticker / Pre-IPO</span>
+                <div className="space-y-2">
                   <input
                     type="text"
-                    placeholder="e.g. TSLA, NVDA"
+                    placeholder="Ticker / Placeholder (e.g. LIME)"
                     value={customTicker}
                     onChange={(e) => setCustomTicker(e.target.value.toUpperCase())}
                     className="bg-[#090d16] border border-[#334155] rounded px-3 py-1.5 text-xs w-full uppercase focus:outline-none focus:border-[#f59e0b]"
                   />
+                  <input
+                    type="text"
+                    placeholder="Optional SEC URL (for S-1 / unlisted)"
+                    value={customSecUrl}
+                    onChange={(e) => setCustomSecUrl(e.target.value)}
+                    className="bg-[#090d16] border border-[#334155] rounded px-3 py-1.5 text-xs w-full focus:outline-none focus:border-[#f59e0b]"
+                  />
                   <button
                     onClick={handleAddCustomTicker}
                     disabled={addingCustomTicker || !customTicker}
-                    className="bg-[#f59e0b] hover:bg-[#d97706] disabled:opacity-50 text-[#090d16] font-bold px-3 py-1.5 rounded text-xs uppercase transition cursor-pointer"
+                    className="w-full bg-[#f59e0b] hover:bg-[#d97706] disabled:opacity-50 text-[#090d16] font-bold px-3 py-1.5 rounded text-xs uppercase transition cursor-pointer"
                   >
-                    {addingCustomTicker ? 'Ingesting...' : 'Add'}
+                    {addingCustomTicker ? 'Ingesting...' : 'Add / Ingest'}
                   </button>
                 </div>
               </div>
+
 
               {/* Select stock */}
               <div>

@@ -88,11 +88,11 @@ COMPILED SOURCES TEXT:
 Return the analysis as a JSON object matching the required schema.
 """
 
-def prompt_multi_source(name, ticker, summary, compiled_text, db_info=""):
+def prompt_multi_source(name, ticker, summary, compiled_text, db_info="", max_compiled_chars=1500000):
     return PROMPT_MULTI_SOURCE.format(
         name=name,
         ticker=ticker,
         summary=summary or "",
         db_info=db_info,
-        compiled_text=compiled_text[:1500000] # Safe limit for token boundaries
+        compiled_text=compiled_text[:max_compiled_chars]
     )

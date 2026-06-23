@@ -30,7 +30,6 @@ def get_effective_override(row, field):
             return db_val
         return np.nan
     
-
 def run_screener(use_current_market_cap=False):
     conn = get_db()
     
@@ -67,15 +66,36 @@ def run_screener(use_current_market_cap=False):
         return
 
     def get_market_cap(row):
+        val = 0.0
         if use_current_market_cap:
             try:
                 info = json.loads(row["raw_info"])
                 val = float(info.get("marketCap", 0))
-                if val > 0:
-                    return val
             except Exception:
                 pass
-        return row["avg_market_cap_36mo"]
+        if val <= 0:
+            val = float(row.get("avg_market_cap_36mo", 0.0) or 0.0)
+            
+        # Fallback for unlisted/pre-IPO companies where market capitalization is unavailable
+        if val <= 0:
+            # 1. Fallback to Book Value of Equity (Total Assets - Total Liabilities) as per AAOIFI Standard No. 21
+            try:
+                info = json.loads(row["raw_info"])
+                total_liabilities = float(info.get("total_liabilities", 0.0))
+            except Exception:
+                total_liabilities = 0.0
+            
+            total_assets = float(row.get("total_assets", 0.0) or 0.0)
+            book_value = total_assets - total_liabilities
+            
+            if book_value > 0:
+                return book_value
+                
+            # 2. Fallback to Total Assets (widely accepted in Islamic PE practice)
+            if total_assets > 0:
+                return total_assets
+                
+        return val
 
     df["market_cap_denom"] = df.apply(get_market_cap, axis=1).replace(0, np.nan)
     mc_denom = df["market_cap_denom"]

@@ -63,8 +63,9 @@ def analyze_company_compliance(ticker, name, summary, source_text=None, db_finan
     if isinstance(result, dict) and "error" not in result:
         return result
     
-    # Fall back to OpenAI
-    result = call_openai(prompt_text, SYSTEM_PROMPT)
+    # Fall back to OpenAI - regenerate with smaller source_text to avoid OpenAI TPM limit and context window limits
+    openai_prompt_text = prompt(name, ticker, summary, db_info, source_text, max_source_chars=300000)
+    result = call_openai(openai_prompt_text, SYSTEM_PROMPT)
     if isinstance(result, dict) and "error" not in result:
         return result
         

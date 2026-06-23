@@ -63,6 +63,12 @@ def call_gemini(prompt_text,system_prompt, client=None, schema=None):
             except Exception as e:
                 err_str = str(e)
                 if "429" in err_str or "quota" in err_str.lower() or "limit" in err_str.lower():
+                    # Support fail-fast behavior to immediately switch to fallback service
+                    fallback_on_rate_limit = os.getenv("FALLBACK_ON_RATE_LIMIT", "true").lower() in ("true", "1", "yes")
+                    if fallback_on_rate_limit:
+                        print(f"⚠️ Warning: Model {model_name} hit rate limit. Switching to fallback service immediately.")
+                        return {"error": f"Gemini rate limit hit: {err_str}"}
+
                     is_daily = "daily" in err_str.lower() or "perday" in err_str.lower()
                     if not is_daily and attempt < 2:
                         sleep_time = 10.0
