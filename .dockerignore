@@ -1,0 +1,39 @@
+# Python
+venv/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# Next.js / Node frontend (has its own Dockerfile)
+frontend/
+
+# Data & logs (runtime artifacts, not source)
+data/
+logs/
+scratch/
+
+# Git
+.git/
+repo.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+
+# Docker
+Dockerfile
+.dockerignore
+
+# Tests (not needed in production image)
+tests/
+tests_mini/
+
+# Misc
+*.md
+*.txt
+!requirements.lock
