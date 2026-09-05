@@ -5,9 +5,9 @@ import re
 import pandas as pd                                                                                           
 import nest_asyncio                                                                                           
                                                                                                                 
-DATABASE_URL = os.getenv("DATABASE_URL")                                                                      
-if not DATABASE_URL:                                                                                          
-    raise RuntimeError("DATABASE_URL must be set; refusing to use embedded database credentials")           
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    raise RuntimeError("DATABASE_URL is required")
                                                                                                                 
 # 1. Clean for raw asyncpg connection (requires postgresql:// or postgres://)                                 
 if DATABASE_URL.startswith("postgresql+asyncpg://"):                                                          
