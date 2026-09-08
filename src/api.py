@@ -12,7 +12,10 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
-from mcp.server.fastmcp import FastMCP                                                                                                                                                                                                                                                          
+try:
+    from fastmcp import FastMCP
+except ImportError:
+    from mcp.server.fastmcp import FastMCP
 from mcp.server.sse import SseServerTransport                                                                                                                                                                                                                                                   
  
 from src.db.helpers import ASYNC_DB_URL, get_db
@@ -59,6 +62,7 @@ def ingest_single_ticker(ticker: str):
 # 1. Initialize FastAPI & enable CORS
 app = FastAPI(title="Shariah Screener API")
 mcp = FastMCP("Screener Tools")
+LEGACY_MCP_ENABLED = os.getenv("AEGIS_ENABLE_LEGACY_DOMAIN_MCP", "0") == "1"
 
 @app.on_event("startup")
 def startup_event():
@@ -945,6 +949,8 @@ mcp_transport = SseServerTransport("/mcp/messages/")
   
 @app.get("/mcp/sse")
 async def handle_mcp_sse(request: Request):
+    if not LEGACY_MCP_ENABLED:
+        raise HTTPException(status_code=503, detail="Legacy domain MCP transport is disabled")
     async with mcp_transport.connect_sse(
         request.scope, request.receive, request._send
     ) as (in_stream, out_stream):
@@ -956,6 +962,8 @@ async def handle_mcp_sse(request: Request):
 
 @app.post("/mcp/messages/")
 async def handle_mcp_messages(request: Request):
+    if not LEGACY_MCP_ENABLED:
+        raise HTTPException(status_code=503, detail="Legacy domain MCP transport is disabled")
     return await mcp_transport.handle_post_message(
         request.scope, request.receive, request._send
     )

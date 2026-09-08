@@ -52,4 +52,4 @@ nest_asyncio
 fastapi                                                                                                                                                                                                                                          
 uvicorn   
 fastmcp
-mcp
+mcp<2.0.0
