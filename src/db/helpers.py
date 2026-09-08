@@ -7,7 +7,7 @@ import nest_asyncio
                                                                                                                 
 DATABASE_URL = os.getenv("DATABASE_URL")                                                                      
 if not DATABASE_URL:                                                                                          
-    DATABASE_URL = "postgresql://Rafiur:Rafiur123@localhost:5433/db_screener"                                 
+    raise RuntimeError("DATABASE_URL must be set; refusing to use embedded database credentials")           
                                                                                                                 
 # 1. Clean for raw asyncpg connection (requires postgresql:// or postgres://)                                 
 if DATABASE_URL.startswith("postgresql+asyncpg://"):                                                          
@@ -228,4 +228,3 @@ class AsyncpgConnection:
                                                                                                                 
 def get_db():                                                                                                 
     return AsyncpgConnection()
-
