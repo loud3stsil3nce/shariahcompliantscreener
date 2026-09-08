@@ -3,7 +3,25 @@
 import React, { useState, useEffect, useRef } from 'react';
 
 // API Configuration
-const API_BASE_URL = 'http://localhost:8001/api';
+const API_BASE_URL = '/api';
+
+// Resilient API Fetch Helper with automatic host & port fallback
+const safeFetch = async (path: string, init?: RequestInit) => {
+  const cleanPath = path.startsWith('/') ? path : '/' + path;
+  const primaryUrl = `/api${cleanPath}`;
+  try {
+    const res = await fetch(primaryUrl, init);
+    if (res.ok) return res;
+  } catch (e) {
+    // Fallthrough to host port fallback
+  }
+
+  if (typeof window !== 'undefined') {
+    const fallbackUrl = `http://${window.location.hostname}:8001/api${cleanPath}`;
+    return await fetch(fallbackUrl, init);
+  }
+  return await fetch(primaryUrl, init);
+};
 
 // Interface Definitions
 interface Stock {
@@ -145,8 +163,8 @@ export default function Dashboard() {
   // Load list of all tickers on mount or when a pipeline completes
   const fetchAllTickers = async () => {
     try {
-      const res = await fetch(`${API_BASE_URL}/stocks`);
-      if (res.ok) {
+      const res = await safeFetch('/stocks');
+      if (res && res.ok) {
         const data = await res.json();
         setAllTickers(data);
       }
@@ -164,8 +182,8 @@ export default function Dashboard() {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`${API_BASE_URL}/universe/${universe}`);
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      const response = await safeFetch(`/universe/${universe}`);
+      if (!response || !response.ok) throw new Error(`HTTP error! status: ${response ? response.status : 'Network error'}`);
       const data = await response.json();
       setStocks(data);
     } catch (err: any) {
