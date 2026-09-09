@@ -89,10 +89,23 @@ def test_run_screener_creates_halal_universe(tmp_path, monkeypatch):
     db_path = tmp_path / "test.db"
     create_stock_db(db_path)
 
+    class FakeDbConn:
+        def __init__(self, db_path):
+            self.conn = sqlite3.connect(db_path)
+            self.conn.row_factory = sqlite3.Row
+        def execute(self, query, params=None):
+            if params:
+                return self.conn.execute(query, params)
+            return self.conn.execute(query)
+        def commit(self):
+            self.conn.commit()
+        def close(self):
+            self.conn.close()
+        def cursor(self):
+            return self.conn.cursor()
+            
     def fake_get_db():
-        conn = sqlite3.connect(db_path)
-        conn.row_factory = sqlite3.Row
-        return conn
+        return FakeDbConn(db_path)
 
     monkeypatch.setattr("src.analysis.screener.get_db", fake_get_db)
 
@@ -136,10 +149,23 @@ def test_pre_ipo_fallback_denominator(tmp_path, monkeypatch):
     conn.commit()
     conn.close()
 
+    class FakeDbConn:
+        def __init__(self, db_path):
+            self.conn = sqlite3.connect(db_path)
+            self.conn.row_factory = sqlite3.Row
+        def execute(self, query, params=None):
+            if params:
+                return self.conn.execute(query, params)
+            return self.conn.execute(query)
+        def commit(self):
+            self.conn.commit()
+        def close(self):
+            self.conn.close()
+        def cursor(self):
+            return self.conn.cursor()
+            
     def fake_get_db():
-        conn = sqlite3.connect(db_path)
-        conn.row_factory = sqlite3.Row
-        return conn
+        return FakeDbConn(db_path)
 
     monkeypatch.setattr("src.analysis.screener.get_db", fake_get_db)
 
