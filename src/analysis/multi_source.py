@@ -127,19 +127,18 @@ def analyze_multi_source_compliance(ticker, name, harvested, summary=None):
     prompt_text = prompt_multi_source(name, ticker, summary, compiled_text, db_info=db_info)
     
     # Try Gemini first
-    result = call_gemini(prompt_text, SYSTEM_PROMPT_MULTI_SOURCE, client=_client, schema=MULTI_SOURCE_RESPONSE_SCHEMA)
-    if isinstance(result, dict) and "error" not in result:
-        write_audit_report(ticker, name, harvested, result)
-        return result
+    gemini_result = call_gemini(prompt_text, SYSTEM_PROMPT_MULTI_SOURCE, client=_client, schema=MULTI_SOURCE_RESPONSE_SCHEMA)
+    if isinstance(gemini_result, dict) and "error" not in gemini_result:
+        write_audit_report(ticker, name, harvested, gemini_result)
+        return gemini_result
+    gemini_err = gemini_result.get("error") if isinstance(gemini_result, dict) else str(gemini_result)
         
     # Fall back to OpenAI - regenerate with smaller compiled_text to avoid OpenAI TPM limit and context window limits
     openai_prompt_text = prompt_multi_source(name, ticker, summary, compiled_text, db_info=db_info, max_compiled_chars=300000)
-    result = call_openai(openai_prompt_text, SYSTEM_PROMPT_MULTI_SOURCE, schema=MULTI_SOURCE_RESPONSE_SCHEMA)
-    if isinstance(result, dict) and "error" not in result:
-        write_audit_report(ticker, name, harvested, result)
-        return result
+    openai_result = call_openai(openai_prompt_text, SYSTEM_PROMPT_MULTI_SOURCE, schema=MULTI_SOURCE_RESPONSE_SCHEMA)
+    if isinstance(openai_result, dict) and "error" not in openai_result:
+        write_audit_report(ticker, name, harvested, openai_result)
+        return openai_result
         
-    if isinstance(result, dict) and "error" in result:
-        return result
-        
-    return {"error": "All AI services failed during multi-source audit."}
+    openai_err = openai_result.get("error") if isinstance(openai_result, dict) else str(openai_result)
+    return {"error": f"All AI services failed during multi-source audit. Gemini: {gemini_err} | OpenAI: {openai_err}"}

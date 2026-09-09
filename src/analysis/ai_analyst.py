@@ -59,16 +59,16 @@ def analyze_company_compliance(ticker, name, summary, source_text=None, db_finan
     prompt_text = prompt(name, ticker, summary, db_info, source_text)
     
     # Try Gemini first
-    result = call_gemini(prompt_text, SYSTEM_PROMPT, client=_client)
-    if isinstance(result, dict) and "error" not in result:
-        return result
+    gemini_result = call_gemini(prompt_text, SYSTEM_PROMPT, client=_client)
+    if isinstance(gemini_result, dict) and "error" not in gemini_result:
+        return gemini_result
+    gemini_err = gemini_result.get("error") if isinstance(gemini_result, dict) else str(gemini_result)
     
     # Fall back to OpenAI - regenerate with smaller source_text to avoid OpenAI TPM limit and context window limits
     openai_prompt_text = prompt(name, ticker, summary, db_info, source_text, max_source_chars=300000)
-    result = call_openai(openai_prompt_text, SYSTEM_PROMPT)
-    if isinstance(result, dict) and "error" not in result:
-        return result
+    openai_result = call_openai(openai_prompt_text, SYSTEM_PROMPT)
+    if isinstance(openai_result, dict) and "error" not in openai_result:
+        return openai_result
         
-    if isinstance(result, dict) and "error" in result:
-        return result
-    return {"error": "All AI services failed. Models exceeded quota/limits"}
+    openai_err = openai_result.get("error") if isinstance(openai_result, dict) else str(openai_result)
+    return {"error": f"All AI services failed. Gemini: {gemini_err} | OpenAI: {openai_err}"}

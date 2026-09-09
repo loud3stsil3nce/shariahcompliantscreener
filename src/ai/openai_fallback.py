@@ -13,7 +13,7 @@ def call_openai(prompt_text, system_prompt, schema=None):
     openai_key = os.getenv("OPENAI_API_KEY")
     schema = schema or RESPONSE_SCHEMA
     if not openai_key:
-        return None
+        return {"error": "OpenAI API key not configured (OPENAI_API_KEY missing)."}
     
     print("⚠️ Attempting OpenAI (gpt-4o-mini) fallback...")
     headers = {
