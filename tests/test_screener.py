@@ -200,6 +200,7 @@ def test_multi_source_custom_sec_url(tmp_path, monkeypatch):
     def fake_get_db():
         return FakeDbConn(db_path)
         
+    # Monkeypatch get_db in both src.api and src.db.helpers to use test DB
     monkeypatch.setattr("src.api.get_db", fake_get_db)
     monkeypatch.setattr("src.db.helpers.get_db", fake_get_db)
     
