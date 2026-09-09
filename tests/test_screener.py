@@ -197,6 +197,8 @@ def test_multi_source_custom_sec_url(tmp_path, monkeypatch):
             self.conn.commit()
         def close(self):
             self.conn.close()
+        def cursor(self):
+            return self.conn.cursor()
             
     def fake_get_db():
         return FakeDbConn(db_path)
