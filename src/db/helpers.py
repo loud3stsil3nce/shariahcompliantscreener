@@ -7,7 +7,10 @@ import nest_asyncio
                                                                                                                 
 DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
-    raise RuntimeError("DATABASE_URL is required")
+    if os.getenv("PYTEST_CURRENT_TEST") or os.getenv("CI"):
+        DATABASE_URL = os.getenv("TEST_DATABASE_URL", "postgresql+asyncpg://test:test@localhost:5432/test_db")
+    else:
+        raise RuntimeError("DATABASE_URL is required")
                                                                                                                 
 # 1. Clean for raw asyncpg connection (requires postgresql:// or postgres://)                                 
 if DATABASE_URL.startswith("postgresql+asyncpg://"):                                                          
