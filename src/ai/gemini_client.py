@@ -27,17 +27,15 @@ def call_gemini(prompt_text,system_prompt, client=None, schema=None):
 
         return {'error': 'Gemini API Key not found.'}
 
-    # Fallback chain optimized for user rate limits (prioritizing 500 RPD 3.1 Flash Lite)
+    # Fallback chain prioritizing active Gemini models
     models_to_try = [
-        'models/gemini-3.1-flash-lite',
-        'models/gemini-3.5-flash',
-        'models/gemini-2.5-flash',
-        'models/gemini-2.0-flash-lite',
-        'models/gemini-2.0-flash',
+        'models/gemini-3.6-flash',
         'models/gemini-flash-latest',
-        'models/gemini-2.5-pro'
+        'models/gemini-flash-lite-latest',
+        'models/gemini-pro-latest'
     ]
     
+    last_error = None
     for model_name in models_to_try:
         for attempt in range(3):
             try:
@@ -67,8 +65,8 @@ def call_gemini(prompt_text,system_prompt, client=None, schema=None):
                 return json.loads(response.text)
             except Exception as e:
                 err_str = str(e)
+                last_error = err_str
                 if "429" in err_str or "quota" in err_str.lower() or "limit" in err_str.lower():
-                    # Support fail-fast behavior to immediately switch to fallback service
                     fallback_on_rate_limit = os.getenv("FALLBACK_ON_RATE_LIMIT", "true").lower() in ("true", "1", "yes")
                     if fallback_on_rate_limit:
                         print(f"⚠️ Warning: Model {model_name} hit rate limit. Switching to fallback service immediately.")
@@ -86,6 +84,10 @@ def call_gemini(prompt_text,system_prompt, client=None, schema=None):
                     else:
                         print(f"⚠️ Warning: Model {model_name} daily quota exceeded. Trying next...")
                         break
+                elif "404" in err_str or "not found" in err_str.lower():
+                    print(f"⚠️ Warning: Model {model_name} not found (404). Trying next model...")
+                    break
                 else:
-                    return {"error": f"Gemini failed: {err_str}"}
-    return {"error": "All Gemini models failed"}
+                    print(f"⚠️ Warning: Model {model_name} failed: {err_str}. Trying next model...")
+                    break
+    return {"error": f"All Gemini models failed: {last_error}"}

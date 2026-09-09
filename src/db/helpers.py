@@ -5,6 +5,9 @@ import re
 import pandas as pd                                                                                           
 import nest_asyncio                                                                                           
                                                                                                                 
+from dotenv import load_dotenv                                                                                  
+load_dotenv()                                                                                                 
+                                                                                                              
 DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
     if os.getenv("PYTEST_CURRENT_TEST") or os.getenv("CI"):

@@ -60,7 +60,7 @@ def call_with_retry(api_func, *args, **kwargs):
     raise Exception("Max retries exceeded for Gemini API call.")
 
 # --- batched Gemini embedding callers with rate-limit handling and zero-vector fallback ---
-def get_gemini_embeddings(texts, model="models/gemini-embedding-001"):
+def get_gemini_embeddings(texts, model="models/text-embedding-004"):
     """Fetch embeddings for a list of texts using Gemini's API in batches."""
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
@@ -79,7 +79,7 @@ def get_gemini_embeddings(texts, model="models/gemini-embedding-001"):
         if rate_limit_encountered:
             print("⚠️ Skipping batch embedding due to prior rate limit block. Appending zero-vectors.")
             for _ in batch:
-                embeddings.append([0.0] * 3072)
+                embeddings.append([0.0] * 768)
             continue
             
         if idx > 0:
@@ -103,7 +103,7 @@ def get_gemini_embeddings(texts, model="models/gemini-embedding-001"):
                 print("⚠️ Batch failed due to rate limits. Skipping fallback to avoid flooding API. Appending zero-vectors.")
                 rate_limit_encountered = True
                 for _ in batch:
-                    embeddings.append([0.0] * 3072)
+                    embeddings.append([0.0] * 768)
             else:
                 # Fallback to single requests or zero vectors (only for non-rate-limit errors)
                 for text in batch:
@@ -118,14 +118,14 @@ def get_gemini_embeddings(texts, model="models/gemini-embedding-001"):
                     except Exception as fallback_err:
                         print(f"Fallback single request failed: {fallback_err}")
                         # Provide zero vector fallback on failure
-                        embeddings.append([0.0] * 3072)  # 3072 is default gemini-embedding-001 size
+                        embeddings.append([0.0] * 768)
     return embeddings
 
-def get_gemini_query_embedding(query, model="models/gemini-embedding-001"):
+def get_gemini_query_embedding(query, model="models/text-embedding-004"):
     """Fetch embedding for a query using Gemini's API."""
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
-        return [0.0] * 3072
+        return [0.0] * 768
     
     genai.configure(api_key=api_key)
     try:
