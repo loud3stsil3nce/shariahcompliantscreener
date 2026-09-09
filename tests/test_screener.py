@@ -205,6 +205,9 @@ def test_multi_source_custom_sec_url(tmp_path, monkeypatch):
     monkeypatch.setattr("src.api.get_db", fake_get_db)
     monkeypatch.setattr("src.db.helpers.get_db", fake_get_db)
 
+    # Also patch src.analysis.screener.get_db to be consistent
+    monkeypatch.setattr("src.analysis.screener.get_db", fake_get_db)
+
     # Mock SECParser get_text_from_url
     mock_get_text = MagicMock(return_value="Cleaned prospectus text with balance sheets")
     monkeypatch.setattr(SECParser, "get_text_from_url", mock_get_text)
