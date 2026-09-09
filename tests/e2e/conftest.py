@@ -381,9 +381,6 @@ def isolated_db(tmp_path, monkeypatch):
     monkeypatch.setattr("src.analysis.optimizer.get_db", mock_get_db)
     monkeypatch.setattr("src.analysis.batch_ai_audit.get_db", mock_get_db, raising=False)
     monkeypatch.setattr("src.data.ingestion.get_db", mock_get_db)
-    monkeypatch.setattr("ui.database_tab.get_db", mock_get_db)   
-    monkeypatch.setattr("ui.explorer_tab.get_db", mock_get_db)
-    monkeypatch.setattr("ui.rules_tab.get_db", mock_get_db)   
     monkeypatch.setattr("src.db.setup.get_db", mock_get_db)
     
     # Initialize schema using production setup (fully synchronized)

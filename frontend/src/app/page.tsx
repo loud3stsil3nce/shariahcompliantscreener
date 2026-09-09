@@ -11,16 +11,39 @@ const safeFetch = async (path: string, init?: RequestInit) => {
   const primaryUrl = `/api${cleanPath}`;
   try {
     const res = await fetch(primaryUrl, init);
-    if (res.ok) return res;
+    // If ok or client-side informational error, return it
+    if (res.ok || res.status === 400 || res.status === 404 || res.status === 422) return res;
+    // For server/gateway errors (500, 502, 504), fallback to direct backend port if available
+    if (typeof window !== 'undefined' && res.status >= 500) {
+      const fallbackUrl = `http://${window.location.hostname}:8001/api${cleanPath}`;
+      try {
+        const fbRes = await fetch(fallbackUrl, init);
+        return fbRes;
+      } catch {
+        return res;
+      }
+    }
+    return res;
   } catch (e) {
-    // Fallthrough to host port fallback
+    if (typeof window !== 'undefined') {
+      const fallbackUrl = `http://${window.location.hostname}:8001/api${cleanPath}`;
+      try {
+        return await fetch(fallbackUrl, init);
+      } catch {
+        throw e;
+      }
+    }
+    throw e;
   }
+};
 
-  if (typeof window !== 'undefined') {
-    const fallbackUrl = `http://${window.location.hostname}:8001/api${cleanPath}`;
-    return await fetch(fallbackUrl, init);
+const parseApiResponse = async (res: Response) => {
+  const text = await res.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { detail: text || `Server error (Status ${res.status})` };
   }
-  return await fetch(primaryUrl, init);
 };
 
 // Interface Definitions
@@ -160,6 +183,38 @@ export default function Dashboard() {
   const [mcpStatus, setMcpStatus] = useState<any | null>(null);
   const [mcpLoading, setMcpLoading] = useState<boolean>(false);
 
+  // Non-blocking Dismissible Modal / Alert State
+  const [modal, setModal] = useState<{
+    isOpen: boolean;
+    type: 'success' | 'error' | 'info';
+    title: string;
+    message: string;
+  }>({
+    isOpen: false,
+    type: 'info',
+    title: '',
+    message: ''
+  });
+
+  const showAlert = (message: string, type: 'success' | 'error' | 'info' = 'info', title?: string) => {
+    setModal({
+      isOpen: true,
+      type,
+      title: title || (type === 'error' ? 'Error / Notice' : type === 'success' ? 'Success' : 'Information'),
+      message: String(message)
+    });
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setModal(prev => ({ ...prev, isOpen: false }));
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   // Load list of all tickers on mount or when a pipeline completes
   const fetchAllTickers = async () => {
     try {
@@ -239,12 +294,16 @@ export default function Dashboard() {
   const triggerIngestion = async () => {
     setIngesting(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/pipeline/ingest?refresh=true`, { method: 'POST' });
-      const data = await response.json();
-      alert(data.message);
-      fetchAllTickers();
+      const response = await safeFetch('/pipeline/ingest?refresh=true', { method: 'POST' });
+      const data = await parseApiResponse(response);
+      if (response.ok) {
+        showAlert(data.message || 'Data ingestion completed successfully!', 'success', 'Ingestion Complete');
+        fetchAllTickers();
+      } else {
+        showAlert(data.detail || 'Data ingestion failed.', 'error', 'Ingestion Failed');
+      }
     } catch (err: any) {
-      alert(`Ingestion failed: ${err.message}`);
+      showAlert(`Ingestion failed: ${err.message}`, 'error', 'Ingestion Error');
     } finally {
       setIngesting(false);
     }
@@ -254,14 +313,18 @@ export default function Dashboard() {
   const triggerScreening = async () => {
     setScreening(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/pipeline/screen`, { method: 'POST' });
-      const data = await response.json();
-      alert(data.message);
-      if (['halal', 'doubtful', 'rejected'].includes(activeTab)) {
-        fetchUniverse(activeTab as any);
+      const response = await safeFetch('/pipeline/screen', { method: 'POST' });
+      const data = await parseApiResponse(response);
+      if (response.ok) {
+        showAlert(data.message || 'Universe screening completed successfully!', 'success', 'Screening Complete');
+        if (['halal', 'doubtful', 'rejected'].includes(activeTab)) {
+          fetchUniverse(activeTab as any);
+        }
+      } else {
+        showAlert(data.detail || 'Universe screening failed.', 'error', 'Screening Failed');
       }
     } catch (err: any) {
-      alert(`Screening failed: ${err.message}`);
+      showAlert(`Screening failed: ${err.message}`, 'error', 'Screening Error');
     } finally {
       setScreening(false);
     }
@@ -273,7 +336,7 @@ export default function Dashboard() {
     if (!manualTicker) return;
 
     try {
-      const response = await fetch(`${API_BASE_URL}/overrides/manual`, {
+      const response = await safeFetch('/overrides/manual', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -283,8 +346,9 @@ export default function Dashboard() {
           reasoning: manualReason
         })
       });
+      const data = await parseApiResponse(response);
       if (response.ok) {
-        alert(`Override saved for ${manualTicker.toUpperCase()}`);
+        showAlert(`Override saved for ${manualTicker.toUpperCase()}`, 'success', 'Override Saved');
         setManualTicker('');
         setManualHaramRevenue('');
         setManualDebtRatio('');
@@ -292,9 +356,11 @@ export default function Dashboard() {
         if (['halal', 'doubtful', 'rejected'].includes(activeTab)) {
           fetchUniverse(activeTab as any);
         }
+      } else {
+        showAlert(data.detail || 'Failed to save override.', 'error', 'Override Failed');
       }
     } catch (err: any) {
-      alert(`Override failed: ${err.message}`);
+      showAlert(`Override failed: ${err.message}`, 'error', 'Override Error');
     }
   };
 
@@ -303,7 +369,7 @@ export default function Dashboard() {
     setOptimizing(true);
     setOptimizeResult(null);
     try {
-      const response = await fetch(`${API_BASE_URL}/portfolio/optimize`, {
+      const response = await safeFetch('/portfolio/optimize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -314,11 +380,10 @@ export default function Dashboard() {
           target_ret: targetRet / 100.0
         })
       });
+      const data = await parseApiResponse(response);
       if (!response.ok) {
-        const errData = await response.json();
-        throw new Error(errData.detail || 'Constraints impossible to satisfy');
+        throw new Error(data.detail || 'Constraints impossible to satisfy');
       }
-      const data = await response.json();
       setOptimizeResult(data);
       
       // Initialize calculator values
@@ -332,7 +397,7 @@ export default function Dashboard() {
       // Load Frontier chart
       setFrontierChartUrl(`${API_BASE_URL}/portfolio/frontier-chart?t=${Date.now()}`);
     } catch (err: any) {
-      alert(`Optimization failed: ${err.message}`);
+      showAlert(`Optimization failed: ${err.message}`, 'error', 'Optimization Error');
     } finally {
       setOptimizing(false);
     }
@@ -372,20 +437,19 @@ export default function Dashboard() {
     setBacktestRunning(true);
     setBacktestResult(null);
     try {
-      const res = await fetch(`${API_BASE_URL}/portfolio/backtest`, {
+      const res = await safeFetch('/portfolio/backtest', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ months: backtestWindow })
       });
+      const data = await parseApiResponse(res);
       if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.detail || 'Backtest failed');
+        throw new Error(data.detail || 'Backtest failed');
       }
-      const data = await res.json();
       setBacktestResult(data);
       setBacktestChartUrl(`${API_BASE_URL}/portfolio/backtest-chart?t=${Date.now()}`);
     } catch (err: any) {
-      alert(`Backtest failed: ${err.message}`);
+      showAlert(`Backtest failed: ${err.message}`, 'error', 'Backtest Error');
     } finally {
       setBacktestRunning(false);
     }
@@ -396,22 +460,22 @@ export default function Dashboard() {
     if (!customTicker) return;
     setAddingCustomTicker(true);
     try {
-      let url = `${API_BASE_URL}/stocks/${customTicker}/ingest`;
+      let path = `/stocks/${customTicker}/ingest`;
       if (customSecUrl.trim()) {
-        url += `?sec_url=${encodeURIComponent(customSecUrl.trim())}`;
+        path += `?sec_url=${encodeURIComponent(customSecUrl.trim())}`;
       }
-      const res = await fetch(url, { method: 'POST' });
-      const data = await res.json();
+      const res = await safeFetch(path, { method: 'POST' });
+      const data = await parseApiResponse(res);
       if (res.ok) {
-        alert(data.message);
+        showAlert(data.message || `Successfully ingested ${customTicker}`, 'success', 'Ingest Successful');
         setCustomTicker('');
         setCustomSecUrl('');
         fetchAllTickers();
       } else {
-        alert(data.detail || 'Failed to ingest custom ticker');
+        showAlert(data.detail || 'Failed to ingest custom ticker', 'error', 'Ingest Failed');
       }
     } catch (err: any) {
-      alert(`Ingest error: ${err.message}`);
+      showAlert(`Ingest error: ${err.message}`, 'error', 'Ingest Error');
     } finally {
       setAddingCustomTicker(false);
     }
@@ -422,19 +486,19 @@ export default function Dashboard() {
   const handleDeleteStock = async (ticker: string) => {
     if (!confirm(`Are you sure you want to permanently delete ${ticker} and its overrides from the database?`)) return;
     try {
-      const res = await fetch(`${API_BASE_URL}/stocks/${ticker}`, { method: 'DELETE' });
-      const data = await res.json();
+      const res = await safeFetch(`/stocks/${ticker}`, { method: 'DELETE' });
+      const data = await parseApiResponse(res);
       if (res.ok) {
-        alert(data.message);
+        showAlert(data.message || `Deleted ${ticker}`, 'success', 'Ticker Deleted');
         setSelectedExplorerTicker('');
         setExplorerStockDetails(null);
         setExplorerLiveQuote(null);
         fetchAllTickers();
       } else {
-        alert(data.detail || 'Failed to delete ticker');
+        showAlert(data.detail || 'Failed to delete ticker', 'error', 'Delete Failed');
       }
     } catch (e: any) {
-      alert(`Delete failed: ${e.message}`);
+      showAlert(`Delete failed: ${e.message}`, 'error', 'Delete Error');
     }
   };
 
@@ -448,9 +512,9 @@ export default function Dashboard() {
 
     const loadDetails = async () => {
       try {
-        const res = await fetch(`${API_BASE_URL}/stocks/${selectedExplorerTicker}`);
-        if (res.ok) {
-          const data = await res.json();
+        const res = await safeFetch(`/stocks/${selectedExplorerTicker}`);
+        if (res && res.ok) {
+          const data = await parseApiResponse(res);
           setExplorerStockDetails(data);
         }
       } catch (err) {
@@ -469,9 +533,12 @@ export default function Dashboard() {
       setExplorerLiveLoading(true);
       setExplorerLiveError(null);
       try {
-        const res = await fetch(`${API_BASE_URL}/stocks/${selectedExplorerTicker}/quote`);
-        if (!res.ok) throw new Error('Real-time price feed failed');
-        const quote = await res.json();
+        const res = await safeFetch(`/stocks/${selectedExplorerTicker}/quote`);
+        if (!res || !res.ok) {
+          const errData = res ? await parseApiResponse(res) : null;
+          throw new Error(errData?.detail || 'Real-time price feed failed');
+        }
+        const quote = await parseApiResponse(res);
         setExplorerLiveQuote(quote);
       } catch (err: any) {
         setExplorerLiveError(err.message);
@@ -503,22 +570,22 @@ export default function Dashboard() {
     setAiAuditStep(steps[type]);
 
     try {
-      const res = await fetch(`${API_BASE_URL}/stocks/${selectedExplorerTicker}/audit`, {
+      const res = await safeFetch(`/stocks/${selectedExplorerTicker}/audit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ audit_type: type })
       });
-      const data = await res.json();
+      const data = await parseApiResponse(res);
       if (res.ok) {
-        alert('AI Audit completed and saved successfully!');
+        showAlert('AI Audit completed and saved successfully!', 'success', 'AI Audit Complete');
         // Reload details to capture the override reasoning
-        const resD = await fetch(`${API_BASE_URL}/stocks/${selectedExplorerTicker}`);
-        if (resD.ok) setExplorerStockDetails(await resD.json());
+        const resD = await safeFetch(`/stocks/${selectedExplorerTicker}`);
+        if (resD && resD.ok) setExplorerStockDetails(await parseApiResponse(resD));
       } else {
-        alert(data.detail || 'AI Audit failed');
+        showAlert(data.detail || data.error || 'AI Audit failed', 'error', 'AI Audit Failed');
       }
     } catch (err: any) {
-      alert(`AI Audit error: ${err.message}`);
+      showAlert(`AI Audit error: ${err.message}`, 'error', 'AI Audit Network Error');
     } finally {
       setAiAuditing(false);
       setAiAuditStep('');
@@ -535,23 +602,23 @@ export default function Dashboard() {
     formData.append('file', uploadFile);
 
     try {
-      const res = await fetch(`${API_BASE_URL}/stocks/${selectedExplorerTicker}/upload-audit`, {
+      const res = await safeFetch(`/stocks/${selectedExplorerTicker}/upload-audit`, {
         method: 'POST',
         body: formData
       });
-      const data = await res.json();
+      const data = await parseApiResponse(res);
       if (res.ok) {
-        alert('Document AI audit complete!');
+        showAlert('Document AI audit complete!', 'success', 'Upload Audit Complete');
         setUploadFile(null);
         if (fileInputRef.current) fileInputRef.current.value = '';
         // Reload details
-        const resD = await fetch(`${API_BASE_URL}/stocks/${selectedExplorerTicker}`);
-        if (resD.ok) setExplorerStockDetails(await resD.json());
+        const resD = await safeFetch(`/stocks/${selectedExplorerTicker}`);
+        if (resD && resD.ok) setExplorerStockDetails(await parseApiResponse(resD));
       } else {
-        alert(data.detail || 'Document upload audit failed');
+        showAlert(data.detail || data.error || 'Document upload audit failed', 'error', 'Upload Audit Failed');
       }
     } catch (err: any) {
-      alert(`Upload error: ${err.message}`);
+      showAlert(`Upload error: ${err.message}`, 'error', 'Upload Error');
     } finally {
       setAiAuditing(false);
       setAiAuditStep('');
@@ -1682,6 +1749,52 @@ export default function Dashboard() {
         )}
 
       </section>
+
+      {/* Non-blocking Dismissible Modal Dialog */}
+      {modal.isOpen && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn"
+          onClick={() => setModal(prev => ({ ...prev, isOpen: false }))}
+        >
+          <div 
+            className="bg-[#0f172a] border border-[#334155] rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 relative"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button 
+              onClick={() => setModal(prev => ({ ...prev, isOpen: false }))}
+              className="absolute top-4 right-4 text-[#94a3b8] hover:text-[#f1f5f9] text-base p-1.5 rounded-lg hover:bg-[#1e293b] transition cursor-pointer"
+              title="Close (Esc)"
+            >
+              ✕
+            </button>
+
+            <div className="flex items-start gap-3.5 pr-6">
+              <span className="text-2xl flex-shrink-0">
+                {modal.type === 'success' ? '✅' : modal.type === 'error' ? '⚠️' : 'ℹ️'}
+              </span>
+              <div className="flex-1 min-w-0">
+                <h3 className={`text-sm font-bold uppercase tracking-wider ${
+                  modal.type === 'success' ? 'text-[#10b981]' : modal.type === 'error' ? 'text-[#f43f5e]' : 'text-[#f59e0b]'
+                }`}>
+                  {modal.title}
+                </h3>
+                <p className="text-xs text-[#cbd5e1] mt-2 whitespace-pre-wrap leading-relaxed max-h-72 overflow-y-auto font-mono bg-[#090d16]/60 p-3 rounded-lg border border-[#1e293b]">
+                  {modal.message}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <button
+                onClick={() => setModal(prev => ({ ...prev, isOpen: false }))}
+                className="bg-[#f59e0b] hover:bg-[#d97706] text-[#090d16] font-bold text-xs uppercase tracking-wider px-5 py-2.5 rounded-lg transition cursor-pointer"
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

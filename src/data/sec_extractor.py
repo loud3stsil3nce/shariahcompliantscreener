@@ -82,12 +82,7 @@ class SECParser:
             else:
                 table.decompose()
                 
-        # Insert spacing around block tags to keep paragraphs distinct
-        block_tags = ["p", "div", "br", "h1", "h2", "h3", "h4", "h5", "h6", "li", "tr"]
-        for tag in soup.find_all(block_tags):
-            tag.insert_after(soup.new_string("\n"))
-
-        text = soup.get_text()
+        text = soup.get_text(separator="\n")
         
         # Clean up Inline XBRL/iXBRL tags or malformed XML that BeautifulSoup might have bypassed
         text = re.sub(r'<[^>]+>', '', text)
