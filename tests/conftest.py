@@ -127,16 +127,6 @@ def setup_db(db_path, monkeypatch):
     monkeypatch.setattr(src.analysis.ai_analyst, "get_db", fake_get_db, raising=False)                        
     monkeypatch.setattr(src.analysis.backtester, "get_db", fake_get_db, raising=False)
     monkeypatch.setattr(src.db.setup, "get_db", fake_get_db)
-    # We may also need to patch UI modules if they are imported by tests
-    try:
-        import ui.database_tab
-        monkeypatch.setattr(ui.database_tab, "get_db", fake_get_db)
-        import ui.explorer_tab
-        monkeypatch.setattr(ui.explorer_tab, "get_db", fake_get_db)
-        import ui.rules_tab
-        monkeypatch.setattr(ui.rules_tab, "get_db", fake_get_db)
-    except ImportError:
-        pass
 
     # Initialize database using production schema setup (fully synchronized)
     src.db.setup.init_db_tables()

@@ -32,7 +32,7 @@ else:
 DB_PATH = "data/halal_screener.db" 
                                                                                                              
 def run_sync(coro):                                                                                           
-    """Utility to run async coroutines synchronously within any thread (including Streamlit)."""              
+    """Utility to run async coroutines synchronously within any thread."""              
     try:                                                                                                      
         loop = asyncio.get_event_loop()                                                                       
     except RuntimeError:                                                                                      

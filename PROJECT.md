@@ -16,12 +16,12 @@ This application is a Shariah compliance screener and portfolio optimizer. It co
                                                    │
                                                    ├──> [Portfolio Optimizer]
                                                    │
-                                                   ▼
-                                            [Streamlit UI]
+                                                    ▼
+                                             [Next.js UI]
 ```
 
 ## Code Layout
-- `main.py` - Main Streamlit UI frontend dashboard.
+- `frontend/` - Next.js React TypeScript frontend dashboard.
 - `src/screener.py` - Core screening calculations (including Tangibility, Debt, Cash, and Combined Revenue thresholds).
 - `src/optimizer.py` - Portfolio optimizer utilizing SciPy to allocate weight under constraints.
 - `src/ai_analyst.py` - AI auditor that disaggregates composite segment revenue and extracts interest income.
@@ -34,7 +34,7 @@ This application is a Shariah compliance screener and portfolio optimizer. It co
 |---|------|-------|-------------|--------|
 | E2E | Milestone E2E | Design E2E testing framework, test runner, and Tiers 1-4 tests | None | DONE (completed by b7669163-9b36-4f83-ae45-ac990606ccf9) |
 | 1 | Milestone 1 | Implement Tangibility Screen (replace Accounts Receivable) | None | DONE (completed by e5fd108f-a1df-4672-90af-77da0e4054d5) |
-| 2 | Milestone 2 | Separate Doubtful stock status in DB, Optimizer, and Streamlit UI | Milestone 1 | IN_PROGRESS (Conv ID: 46a4a71b-28ce-4b48-b059-770c868dbc8d) |
+| 2 | Milestone 2 | Separate Doubtful stock status in DB, Optimizer, and Next.js UI | Milestone 1 | DONE |
 | 3 | Milestone 3 | Implement generalizable AI auditing (Interest Income priority + disaggregation rules) | None | PLANNED (Track: 46a4a71b-28ce-4b48-b059-770c868dbc8d) |
 | 4 | Milestone 4 | Final integration, verify 100% test pass, White-box hardening (Tier 5), Audit | Milestones E2E, 1, 2, 3 | PLANNED (Track: 46a4a71b-28ce-4b48-b059-770c868dbc8d) |
 
