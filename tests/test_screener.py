@@ -159,11 +159,12 @@ def test_multi_source_custom_sec_url(tmp_path, monkeypatch):
     from src.data.sec_extractor import SECParser
     import src.data.harvester as harvester
     from src.api import run_ai_audit, AuditInput
-    
+    import pandas as pd
+
     # 1. Setup temporary database with a custom stock having sec_filing_url
     db_path = tmp_path / "test_audit.db"
     create_stock_db(db_path)
-    
+
     conn = sqlite3.connect(db_path)
     conn.execute("ALTER TABLE stocks ADD COLUMN sec_filing_url TEXT")
     conn.execute(
@@ -178,12 +179,12 @@ def test_multi_source_custom_sec_url(tmp_path, monkeypatch):
         (
             "LIME", "Neutron Holdings", "Technology", "Software",
             1000.0, 150.0, 100.0, 0.0, 500.0, 0.0,
-            100.0, 0.0, '{"total_liabilities": 400.0}', "https://www.sec.gov/S-1/lime-prospectus.htm", "2026-06-13T00:00:00"
+            100.0, 0.0, "{}", "https://www.sec.gov/S-1/lime-prospectus.htm", "2026-06-13T00:00:00"
         )
     )
     conn.commit()
     conn.close()
-    
+
     class FakeDbConn:
         def __init__(self, db_path):
             self.conn = sqlite3.connect(db_path)
@@ -202,33 +203,32 @@ def test_multi_source_custom_sec_url(tmp_path, monkeypatch):
         
     monkeypatch.setattr("src.api.get_db", fake_get_db)
     monkeypatch.setattr("src.db.helpers.get_db", fake_get_db)
-    
+
     # Mock SECParser get_text_from_url
     mock_get_text = MagicMock(return_value="Cleaned prospectus text with balance sheets")
     monkeypatch.setattr(SECParser, "get_text_from_url", mock_get_text)
-    
+
     # Mock harvester web search and other calls
     mock_web_search = AsyncMock(return_value="Web search evidence text")
     monkeypatch.setattr(harvester, "search_web_evidence", mock_web_search)
-    
+
     mock_transcript = AsyncMock(return_value="Earnings transcript text")
     monkeypatch.setattr(harvester, "fetch_transcript", mock_transcript)
-    
+
     mock_pdf = AsyncMock(return_value="https://test.com/presentation.pdf")
     monkeypatch.setattr(harvester, "search_ir_presentation_pdf", mock_pdf)
-    
+
     mock_download_pdf = AsyncMock(return_value="Investor presentation text")
     monkeypatch.setattr(harvester, "download_pdf_text", mock_download_pdf)
-    
+
     # Mock pandas read_sql_query for the api
-    import pandas as pd
     orig_read_sql = pd.read_sql_query
     def fake_read_sql_query(query, conn):
         actual_conn = conn.conn if hasattr(conn, "conn") else conn
         return orig_read_sql(query, actual_conn)
         
     monkeypatch.setattr("pandas.read_sql_query", fake_read_sql_query)
-    
+
     # Mock AI Analyst compliance check
     mock_analyze = MagicMock(return_value={
         "filing_period_months": 12,
@@ -242,18 +242,18 @@ def test_multi_source_custom_sec_url(tmp_path, monkeypatch):
         "detailed_reasoning": "Permissible business activities"
     })
     monkeypatch.setattr("src.analysis.ai_analyst.analyze_multi_source_compliance", mock_analyze)
-    
+
     # Test harvest_all_sources directly
     harvested = asyncio.run(harvester.harvest_all_sources("LIME", year=2025, quarter=4))
-    
+
     # Verify company name was retrieved from database and used in queries instead of placeholder "LIME"
     called_queries = [call.args[0] for call in mock_web_search.call_args_list]
     assert any("Neutron Holdings segment revenue" in q for q in called_queries)
-    
+
     # Test the API endpoint run_ai_audit itself
     audit_input = AuditInput(audit_type="multi_source")
     response = asyncio.run(run_ai_audit("LIME", audit_input))
-    
+
     # Verify that SECParser.get_text_from_url was called with the database's sec_filing_url
     mock_get_text.assert_called_with("https://www.sec.gov/S-1/lime-prospectus.htm")
     assert response is not None
@@ -262,11 +262,11 @@ def test_multi_source_custom_sec_url(tmp_path, monkeypatch):
 def test_fallback_on_rate_limit(monkeypatch):
     import os
     from src.ai.gemini_client import call_gemini
-    
+
     # Force API Key to be configured for testing
     monkeypatch.setenv("GEMINI_API_KEY", "dummy_key")
     monkeypatch.setenv("FALLBACK_ON_RATE_LIMIT", "true")
-    
+
     class DummyClient:
         class GenerativeModel:
             def __init__(self, *args, **kwargs):
@@ -275,7 +275,7 @@ def test_fallback_on_rate_limit(monkeypatch):
                 raise Exception("Resource has been exhausted (e.g. check quotas/limit). 429 error.")
                 
     result = call_gemini("dummy prompt", "dummy system instruction", client=DummyClient)
-    
+
     # Verify it returned a rate limit error dictionary immediately instead of retrying/sleeping
     assert isinstance(result, dict)
     assert "error" in result
