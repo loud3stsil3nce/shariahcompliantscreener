@@ -19,8 +19,13 @@ def call_gemini(prompt_text,system_prompt, client=None, schema=None):
     """Call Gemini to perform a full Shariah Audit, optionally using 10-K source text."""
     client = client or genai
     schema = schema or RESPONSE_SCHEMA
-    if not api_key:
-        return {"error": "Gemini API Key not found."}
+    passed_client = client
+
+    active_key = os.getenv('GEMINI_API_KEY') or api_key
+
+    if not active_key and passed_client is None:
+
+        return {'error': 'Gemini API Key not found.'}
 
     # Fallback chain optimized for user rate limits (prioritizing 500 RPD 3.1 Flash Lite)
     models_to_try = [
@@ -84,6 +89,3 @@ def call_gemini(prompt_text,system_prompt, client=None, schema=None):
                 else:
                     return {"error": f"Gemini failed: {err_str}"}
     return {"error": "All Gemini models failed"}
-     
-     
-     
